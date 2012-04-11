@@ -93,9 +93,9 @@ void rgltrSetRollRateFilter(RateFilterParams params);
  *
  * @param params - Yaw PID parameter struct
  */
-void rgltrSetPidYaw(PidParams params);
-void rgltrSetPidPitch(PidParams params);
-void rgltrSetPidRoll(PidParams params);
+void rgltrSetYawPid(PidParams params);
+void rgltrSetPitchPid(PidParams params);
+void rgltrSetRollPid(PidParams params);
 
 /**
  * Set yaw reference value

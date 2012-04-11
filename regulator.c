@@ -143,7 +143,7 @@ void rgltrSetRollRateFilter(RateFilterParams params) {
 
 }
 
-void rgltrSetPidYaw(PidParams params) {
+void rgltrSetYawPid(PidParams params) {
     
     ctrlSetPidParams(yawPid, params->ref, params->kp, params->ki, params->kd);
     ctrlSetPidOffset(yawPid, params->offset);
@@ -152,7 +152,7 @@ void rgltrSetPidYaw(PidParams params) {
 
 }
 
-void rgltrSetPidPitch(PidParams params) {
+void rgltrSetPitchPid(PidParams params) {
     
     ctrlSetPidParams(pitchPid, params->ref, params->kp, params->ki, params->kd);
     ctrlSetPidOffset(pitchPid, params->offset);
@@ -161,7 +161,7 @@ void rgltrSetPidPitch(PidParams params) {
 
 }
 
-void rgltrSetPidRoll(PidParams params) {
+void rgltrSetRollPid(PidParams params) {
 
     ctrlSetPidParams(rollPid, params->ref, params->kp, params->ki, params->kd);
     ctrlSetPidOffset(rollPid, params->offset);

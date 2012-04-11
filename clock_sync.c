@@ -44,7 +44,7 @@
 // ==== REFERENCES ============================================================
 #include "mac_packet.h"
 #include "radio.h"
-#include "network.h"
+#include "net.h"
 #include "cmd_const.h"
 #include "sys_clock.h"
 #include "clock_sync.h"
@@ -140,7 +140,7 @@ void clksyncHandleRequest(MacPacket packet) {
     macSetDestAddr(response, macGetSrcAddr(packet));
     macSetDestPan(response, macGetSrcPan(packet));
     pld = macGetPayload(response); // Create response packet
-    paySetType(pld, CMD_RESPONSE_CLOCK_UPDATE);
+    paySetType(pld, CMD_CLOCK_UPDATE_RESPONSE);
     paySetData(pld, 4, (unsigned char*) &s0);
     payAppendData(pld, 4, 4, (unsigned char*) & m1);
     
@@ -192,7 +192,7 @@ static void clksyncSendRequest(SyncStatus sync) {
     macSetDestAddr(packet, sync->master_addr);
     macSetDestPan(packet, sync->master_pan);
     pld = macGetPayload(packet);
-    paySetType(pld, CMD_REQUEST_CLOCK_UPDATE);
+    paySetType(pld, CMD_CLOCK_UPDATE_REQUEST);
 
     while(!radioTxQueueEmpty()) { radioProcess(); }
     

@@ -34,18 +34,17 @@
 * v.beta
 *
 * Revisions:
-*  Humphrey Hu		2011-07-27		Initial implementation
-*	Humphrey Hu		2011-09-03		Moved directory to separate module 
+*   Humphrey Hu         2011-07-27      Initial implementation
+*   Humphrey Hu         2011-09-03      Moved directory to separate module
 *                      
 * Notes:
 *
 * TODO:
 *	Implement robust multi-hop networking
-*	Put send functions in correct module
 */
 
 // ==== REFERENCES ==========================================
-#include "network.h"
+#include "net.h"
 #include "radio.h"
 #include "cmd_const.h"
 #include "utils.h"

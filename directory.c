@@ -43,7 +43,7 @@
  */
 // ==== REFERENCES ==============================================
 #include "directory.h"
-#include "linear_array.h"
+#include "larray.h"
 #include <stdlib.h>
 
 // ==== Static Variables =======================================================
@@ -55,6 +55,7 @@ DirEntry base;
 DirEntry dirCreateEntry(void);
 void dirDeleteEntry(DirEntry entry);
 unsigned int entryCompare(void* p1, void* p2);
+unsigned int searchAddress(DirEntry entry, void* args);
 
 // ==== FUNCTION BODIES =========================================
 void dirInit(unsigned int size) {
@@ -62,8 +63,6 @@ void dirInit(unsigned int size) {
     dir = larrayCreate(size);    
 
  }
-
-
 
 DirEntry dirQuery(DirEntryTest comp, void *args) {
 
@@ -75,6 +74,16 @@ DirEntry dirQuery(DirEntryTest comp, void *args) {
 
     if(num == 0) { return NULL; }
     return entry;
+
+}
+
+DirEntry dirQueryAddress(unsigned int addr, unsigned int pan) {
+
+    unsigned int args[2];
+    args[0] = addr;
+    args[1] = pan;
+    
+    return dirQuery(&searchAddress, args);
 
 }
 
@@ -112,6 +121,14 @@ unsigned int entryCompare(void* p1, void* p2) {
     }
 
     return entry1->address == entry2->address;
+
+}
+
+unsigned int searchAddress(DirEntry entry, void *args) {
+
+    if(entry == NULL) { return 0; }
+    return entry->address == ((unsigned int*)args)[0] &&
+            entry->pan_id == ((unsigned int*)args)[1];
 
 }
 

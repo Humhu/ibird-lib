@@ -38,10 +38,11 @@
  *                      
  * 
  */
+
 #include "sys_clock.h"
 #include "telemetry.h"
 #include "radio.h"
-#include "network.h"
+#include "net.h"
 #include "mac_packet.h"
 #include "payload.h"
 #include "gyro.h"
@@ -50,7 +51,7 @@
 #include "attitude.h"
 #include "behavior.h"
 #include "counter.h"
-#include "network.h"
+
 #include "cmd_const.h"
 
 // Function stubs

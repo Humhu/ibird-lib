@@ -43,8 +43,7 @@
  #define __DIRECTORY_H
  
  #include "telemetry.h"
- #include "linear_array.h"
-
+ #include "larray.h"
 typedef enum {
     BASESTATION = 0,
     IBIRD,
@@ -58,12 +57,18 @@ typedef struct {
 } DirEndpointParam;
 
  typedef struct {    
+ 
     unsigned int uuid;          // Endpoint identifier number
     DirEndpointType type;       // Type of endpoint
     DirEndpointParam params;    // Available resource parameters
+ 
+    unsigned long frame_period; // Camera period
+    unsigned long frame_start;  // Last frame capture start time
+ 
     unsigned long timestamp;    // Last time of contact (local time)
     unsigned int address;       // 16-bit radio address
     unsigned int pan_id;        // Radio PAN ID
+    
  } DirEntryStruct;
  
  typedef DirEntryStruct* DirEntry;
@@ -75,6 +80,8 @@ typedef struct {
  void dirInit(unsigned int size);
 
  DirEntry dirQuery(DirEntryTest comp, void *args);
+ DirEntry dirQueryAddress(unsigned int addr, unsigned int pan);
+
  DirEntry dirAddNew(void);
 
  #endif
