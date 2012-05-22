@@ -37,53 +37,75 @@
  *  Humphrey Hu         2011-09-03    Initial implementation
  *                      
  * Notes:
- *
- * To do:
- *     Implement entry number counting
  */
-// ==== REFERENCES ==============================================
+
 #include "directory.h"
 #include "larray.h"
 #include <stdlib.h>
 
 // ==== Static Variables =======================================================
-LinArray dir;
+static unsigned char is_ready = 0;
+static LinArray dir;
 
-DirEntry base;
-
-// ==== FUNCTION STUBS ==========================================
+// ==== Function Stubs =========================================================
 DirEntry dirCreateEntry(void);
 void dirDeleteEntry(DirEntry entry);
-unsigned int entryCompare(void* p1, void* p2);
 unsigned int searchAddress(DirEntry entry, void* args);
+unsigned int searchID(DirEntry entry, void* args);
+unsigned int searchValid(DirEntry entry, void* args);
 
-// ==== FUNCTION BODIES =========================================
+// ==== Function Bodies ========================================================
 void dirInit(unsigned int size) {
 
     dir = larrayCreate(size);    
-
+    is_ready = 1;
+    
  }
 
-DirEntry dirQuery(DirEntryTest comp, void *args) {
+unsigned int dirQuery(DirEntryTest comp, void *args, DirEntry *entry) {
 
-    unsigned int i, num;
-    DirEntry entry;
+    unsigned int i;    
 
-    num = larrayFindFirst(dir, (LinArrayItemTest)comp, args,
-                &i, (LinArrayItem*)&entry);
+    return larrayFindFirst(dir, (LinArrayItemTest)comp, args,
+                &i, (LinArrayItem*) entry);
 
-    if(num == 0) { return NULL; }
-    return entry;
+}
+
+unsigned int dirQueryN(DirEntryTest comp, void *args, DirEntry *entries,
+                        unsigned int N) {
+
+    unsigned int i[N];
+
+    return larrayFindN(dir, (LinArrayItemTest)comp, args, i,
+                            (LinArrayItem*) entries, N);
 
 }
 
 DirEntry dirQueryAddress(unsigned int addr, unsigned int pan) {
 
     unsigned int args[2];
+    DirEntry entry;
+
     args[0] = addr;
     args[1] = pan;
-    
-    return dirQuery(&searchAddress, args);
+
+    // If search successful, return item
+    if(dirQuery(&searchAddress, args, &entry)) {
+        return entry;
+    }
+    return NULL;
+
+}
+
+DirEntry dirQueryID(unsigned long long id) {
+
+    DirEntry entry;
+
+    // If search successful, return item
+    if(dirQuery(&searchID, &id, &entry)) {
+        return entry;
+    }
+    return NULL;
 
 }
 
@@ -107,22 +129,19 @@ DirEntry dirAddNew(void) {
 
 }
 
-// ==== Private Functions ======================================================
+unsigned int dirGetSize(void) {
 
-unsigned int entryCompare(void* p1, void* p2) {
-
-    DirEntry entry1, entry2;
-
-    entry1 = (DirEntry) p1;
-    entry2 = (DirEntry) p2;
-
-    if(entry1 == NULL || entry2 == NULL) {
-        return 1;
-    }
-
-    return entry1->address == entry2->address;
+    return larrayGetSize(dir);
 
 }
+
+unsigned int dirGetEntries(DirEntry *entries) {
+    
+    return dirQueryN(&searchValid, NULL, entries, larrayGetMaxSize(dir));
+
+}
+
+// ==== Private Functions ======================================================
 
 unsigned int searchAddress(DirEntry entry, void *args) {
 
@@ -132,16 +151,25 @@ unsigned int searchAddress(DirEntry entry, void *args) {
 
 }
 
+unsigned int searchID(DirEntry entry, void *args) {
+
+    if(entry == NULL) { return 0; }
+    return entry->uuid == *((unsigned long long *)args);
+
+}
+
+unsigned int searchValid(DirEntry entry, void *args) {
+
+    return entry != NULL;
+
+}
+
 DirEntry dirCreateEntry(void) {
 
     DirEntry entry;
 
-    entry = (DirEntry) malloc(sizeof(DirEntryStruct));
+    entry = (DirEntry) calloc(sizeof(DirEntryStruct), 1);
     if(entry == NULL) { return NULL; }
-
-    entry->uuid = 0;
-    entry->address = 0;
-    entry->pan_id = 0;
 
     return entry;
 

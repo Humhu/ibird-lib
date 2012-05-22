@@ -44,7 +44,8 @@
  
  #include "telemetry.h"
  #include "larray.h"
-typedef enum {
+
+ typedef enum {
     BASESTATION = 0,
     IBIRD,
     OCTOROACH,
@@ -53,21 +54,21 @@ typedef enum {
 typedef struct {
     unsigned char imu : 3;
     unsigned char cam : 3;
-    unsigned int padding : 2;
+    unsigned int padding : 10;
 } DirEndpointParam;
 
- typedef struct {    
+ typedef struct {    // (28)
  
-    unsigned int uuid;          // Endpoint identifier number
-    DirEndpointType type;       // Type of endpoint
-    DirEndpointParam params;    // Available resource parameters
+    unsigned long long uuid;    // Endpoint identifier number (8)
+    DirEndpointType type;       // Type of endpoint (2)
+    DirEndpointParam params;    // Available resource parameters (2)    
  
-    unsigned long frame_period; // Camera period
-    unsigned long frame_start;  // Last frame capture start time
+    unsigned long frame_period; // Camera period (4)
+    unsigned long frame_start;  // Last frame capture start time (4)
  
-    unsigned long timestamp;    // Last time of contact (local time)
-    unsigned int address;       // 16-bit radio address
-    unsigned int pan_id;        // Radio PAN ID
+    unsigned long timestamp;    // Last time of contact in local time (4)
+    unsigned int address;       // 16-bit radio address (2)
+    unsigned int pan_id;        // Radio PAN ID (2)
     
  } DirEntryStruct;
  
@@ -79,8 +80,14 @@ typedef struct {
 
  void dirInit(unsigned int size);
 
- DirEntry dirQuery(DirEntryTest comp, void *args);
+ unsigned int dirQuery(DirEntryTest comp, void *args, DirEntry *entry);
+ unsigned int dirQueryN(DirEntryTest comp, void *args, DirEntry *entries,
+                        unsigned int N);
+
  DirEntry dirQueryAddress(unsigned int addr, unsigned int pan);
+ DirEntry dirQueryID(unsigned long long id);
+ unsigned int dirGetSize(void);
+ unsigned int dirGetEntries(DirEntry *entries);
 
  DirEntry dirAddNew(void);
 
