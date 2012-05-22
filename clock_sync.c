@@ -48,14 +48,14 @@
 #include "cmd_const.h"
 #include "sys_clock.h"
 #include "clock_sync.h"
-
+#include "led.h"
 // ==== CONSTANTS =============================================================
 
 #define DEFAULT_SYNC_TOL        (312) // 0.5 ms (625 ticks/ms)
 
-#define SAMPLES_PER_ITERATION   (20)
-#define MAX_ITERATIONS          (5)
-#define MAX_REQUEST_ATTEMPTS    (50)
+#define SAMPLES_PER_ITERATION   (1)
+#define MAX_ITERATIONS          (40)
+#define MAX_PENDING_REQUESTS    (10)
 
 #define DEFAULT_MASTER_ADDR     (0x1021)
 #define DEFAULT_MASTER_PAN      (0x1001)
@@ -114,10 +114,7 @@ void clksyncSync(void) {
 
 unsigned char clksyncIsDone(void) {
 
-    return (status.state == STATE_SYNCED) ||
-            (status.state == STATE_MASTER) ||
-            (status.state == STATE_REQUEST_TIMEOUT) ||
-            (status.state == STATE_ITERS_EXCEEDED);
+    return status.state != STATE_UNSYNCED;
 
 }
  
@@ -160,7 +157,7 @@ void clksyncHandleResponse(MacPacket packet) {
     Payload pld;    
     unsigned long* frame;
     unsigned long s0, m1, m2, s3;
-    long residual_offset;
+    long long residual_offset;
 
     pld = macGetPayload(packet);
     frame = (unsigned long *) payGetData(pld);
@@ -170,7 +167,7 @@ void clksyncHandleResponse(MacPacket packet) {
     m2 = frame[2];
     s3 = packet->timestamp + sclockGetOffsetTicks();
     
-    residual_offset = (s0 + s3 - m1 - m2)/2;
+    residual_offset = (-s0 - s3 + m1 + m2)/2;
     status.accumulator += residual_offset;
         
     status.responses++;
@@ -204,34 +201,35 @@ static void clksyncSendRequest(SyncStatus sync) {
     radioProcess();
 
     sync->requests++;
-    if(sync->requests > MAX_REQUEST_ATTEMPTS) {
-        sync->state = STATE_REQUEST_TIMEOUT;
+    if(sync->requests - sync->responses > MAX_PENDING_REQUESTS) {
+        sync->state = STATE_REQUEST_TIMEOUT;        
     }
 
 }
 
 void clksyncProcessSamples(SyncStatus sync) {
 
-    unsigned long current_offset;
-    long average_offset;
+    unsigned long current_offset, error;
+    long long average_offset;
 
     current_offset = sclockGetOffsetTicks();
     average_offset = sync->accumulator/sync->responses;
+    error = (unsigned long) current_offset + average_offset;
 
-    sclockSetOffsetTicks(current_offset - average_offset);
+    sclockSetOffsetTicks(error);
 
     sync->accumulator = 0;
     sync->requests = 0;
     sync->responses = 0;
     sync->iterations++;
 
-    if((average_offset < sync->tolerance) && 
-            (average_offset > -(sync->tolerance))) {
+    if((average_offset < sync->tolerance)){ //&&
+            //(average_offset > -(sync->tolerance))) {
         sync->state = STATE_SYNCED;
     }
 
     if(sync->iterations > MAX_ITERATIONS) {
-        sync->state = STATE_ITERS_EXCEEDED;
+        sync->state = STATE_ITERS_EXCEEDED;        
     }
 
 }

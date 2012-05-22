@@ -61,7 +61,7 @@ typedef struct {
     unsigned int requests;
     unsigned int responses;
     unsigned int iterations;
-    long accumulator;
+    long long accumulator;
 } SyncStatusStruct;
 
 typedef SyncStatusStruct* SyncStatus;
