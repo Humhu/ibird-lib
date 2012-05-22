@@ -219,9 +219,7 @@ void netSendRequest(void) {
     paySetStatus(pld, 0);
     paySetType(pld, CMD_ADDRESS_REQUEST);
 
-    while(!radioEnqueueTxPacket(request_packet)) {
-        radioProcess();
-    }
+    while(!radioEnqueueTxPacket(request_packet));
 
 }
 
@@ -243,8 +241,6 @@ void netSendAccept(long offerID) {
     paySetStatus(pld, 0);
     paySetType(pld, CMD_ADDRESS_ACCEPT);
 
-    while(!radioEnqueueTxPacket(accept_packet)) {
-        radioProcess();
-    }
+    while(!radioEnqueueTxPacket(accept_packet));
 
 }

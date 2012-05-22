@@ -142,13 +142,13 @@ void clksyncHandleRequest(MacPacket packet) {
     payAppendData(pld, 4, 4, (unsigned char*) & m1);
     
     // Empty TX queue to minimize time of flight error
-    while(!radioTxQueueEmpty()) { radioProcess(); }
+    while(!radioTxQueueEmpty());
     
     m2 = sclockGetGlobalTicks(); // Get approximate time of flight
     payAppendData(pld, 8, 4, (unsigned char*) & m2);
     
-    while(!radioEnqueueTxPacket(response)) { radioProcess(); }
-    radioProcess();    
+    while(!radioEnqueueTxPacket(response));
+    radioProcess(); // Fast send
 
 }
 
@@ -191,14 +191,14 @@ static void clksyncSendRequest(SyncStatus sync) {
     pld = macGetPayload(packet);
     paySetType(pld, CMD_CLOCK_UPDATE_REQUEST);
 
-    while(!radioTxQueueEmpty()) { radioProcess(); }
+    while(!radioTxQueueEmpty());
     
     s0 = sclockGetGlobalTicks();
     pld = macGetPayload(packet);
     paySetData(pld, 4, (unsigned char*) &s0);
 
-    while(!radioEnqueueTxPacket(packet)) { radioProcess(); }
-    radioProcess();
+    while(!radioEnqueueTxPacket(packet));
+    radioProcess(); // Fast send
 
     sync->requests++;
     if(sync->requests - sync->responses > MAX_PENDING_REQUESTS) {
