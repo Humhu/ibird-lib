@@ -128,8 +128,8 @@ void cvMaxPixelFrame(CamFrame frame, FrameInfo info) {
     unsigned int width, height, i, j, max_val, max_loc[2];
     unsigned char *pixels, val;
 
-    width = frame->num_rows;
-    height = frame->num_cols;
+    width = frame->num_cols;
+    height = frame->num_rows;
     row_array = frame->rows;
     max_val = 0;    
     max_loc[0] = 0;
