@@ -45,12 +45,13 @@
 
 // ==== REFERENCES ==========================================
 #include "net.h"
+#include "directory.h"
 #include "radio.h"
+#include "telemetry.h"
+
 #include "cmd_const.h"
 #include "utils.h"
-#include "telemetry.h" 
 #include "counter.h"
-
 #include "sys_clock.h" 
 
 #include <stdlib.h>
@@ -159,10 +160,10 @@ void netRequestAddress(void) {
 void netHandleOffer(MacPacket packet) {
     
     Payload pld;    
-    long long uuidKey;
-    long offerID;
-    unsigned char* data;
-    
+    unsigned long long uuidKey;
+    unsigned long offerID, timestamp;
+    unsigned char* data;    
+
     pld = macGetPayload(packet);
     uuidKey = *((unsigned long long*) payGetData(pld));
 
@@ -177,6 +178,8 @@ void netHandleOffer(MacPacket packet) {
         baseStationAddress = *((unsigned int*) (data + 18));
         baseStationPanID = *((unsigned int*) (data + 20));
         baseStationChannel = (unsigned char)*((unsigned int*) (data + 22));
+
+        timestamp = *((unsigned long *) data + 24);
 
         netSendAccept(offerID);
         address_received = 1;
