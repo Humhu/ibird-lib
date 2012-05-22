@@ -82,6 +82,12 @@
 #define CMD_ADDRESS_OFFER               (0x31)      // Offer an address to a client
 #define CMD_ADDRESS_ACCEPT              (0x32)      // Accept an offer from coordinator
 
+// TODO: Are these the same? Consolidate into one?
+#define CMD_DIR_UPDATE_REQUEST          (0x34)      // Request a directory update
+#define CMD_DIR_UPDATE_RESPONSE         (0x35)      // A directory update
+#define CMD_DIR_DUMP_REQUEST            (0x36)      // Request a full directory update
+#define CMD_DIR_DUMP_RESPONSE           (0x37)      // A full directory update
+
 #define CMD_CLOCK_UPDATE_REQUEST        (0x38)      // Frame clock sync
 #define CMD_CLOCK_UPDATE_RESPONSE       (0x39)
 
