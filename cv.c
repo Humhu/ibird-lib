@@ -42,6 +42,7 @@
 #include "cam.h"
 #include "counter.h"
 #include "utils.h"
+#include "bams.h" // For fast trig
 
 #include <math.h>
 #include <stdlib.h>
@@ -53,25 +54,25 @@
 
 // State info
 static unsigned char is_ready, is_running;
-static unsigned int frame_size[2];
 
 // Centroid finding variables
 static long centroid_x_acc, centroid_y_acc;
 
-static CamFrame background_frame;
+static CamFrame *background_frame;
 
 // Private functions
-static void cvBackgroundSubtractFrame(CamFrame frame, FrameInfo info);
-static void cvCentroidFrame(CamFrame frame, FrameInfo info);
-static void cvMaxPixelFrame(CamFrame, FrameInfo info);
+static void cvBackgroundSubtractFrame(CamFrame *frame, FrameInfo info);
+static void cvCentroidFrame(CamFrame *frame, FrameInfo info);
+static void cvMaxPixelFrame(CamFrame *frame, FrameInfo info);
+static void cvRotateFrame(CamFrame *frame, bams16_t theta);
+static void cvShiftHoriz(CamFrame *frame, int num);
+static void cvShiftVert(CamFrame *frame, int num);
 
 // Setup the CV module
 void cvSetup(void) {
     
     is_ready = 0;
-    is_running = 0;
-
-    camGetFrameSize(frame_size); // Look up driver output size
+    is_running = 0;    
        
     background_frame = NULL;
     centroid_x_acc = 0;
@@ -81,19 +82,20 @@ void cvSetup(void) {
 
 }
 
-void cvProcessFrame(CamFrame frame, FrameInfo info) {
+void cvProcessFrame(CamFrame *frame, FrameInfo info) {
 
     if(!is_ready) { return; } // Module readiness quick fail       
 
     cvBackgroundSubtractFrame(frame, info);
     cvCentroidFrame(frame, info);
     cvMaxPixelFrame(frame, info);
+    cvRotateFrame(frame, floatToBams16Deg(15));
 
 }
 
-CamFrame cvSetBackgroundFrame(CamFrame frame) {
+CamFrame* cvSetBackgroundFrame(CamFrame *frame) {
 
-    CamFrame old;
+    CamFrame *old;
 
     old = background_frame;
     background_frame = frame;
@@ -102,19 +104,26 @@ CamFrame cvSetBackgroundFrame(CamFrame frame) {
     
 }
 
-void cvBackgroundSubtractFrame(CamFrame frame, FrameInfo info) {
+// =========== Private Functions ===============================================
+/**
+ * Subtract the set background frame from the input frame.
+ *
+ * @param frame - Input frame
+ * @param info - Info struct to populate
+ */
+void cvBackgroundSubtractFrame(CamFrame *frame, FrameInfo info) {
 
     unsigned int i, j, width, height;
     unsigned char *raw_row, *bg_row;    
 
     if(background_frame == NULL) { return; }
 
-    width = frame->num_cols;
-    height = frame->num_rows;
+    width = DS_IMAGE_COLS; // frame->num_cols;
+    height = DS_IMAGE_ROWS; // frame->num_rows;
 
     for(i = 0; i < height; i++) {
-        raw_row = frame->rows[i]->pixels;
-        bg_row = background_frame->rows[i]->pixels;
+        raw_row = frame->pixels[i]; //frame->rows[i]->pixels;
+        bg_row = background_frame->pixels[i]; // background_frame->rows[i]->pixels;
         for(j = 0; j < width; j++) {
             raw_row[j] = (raw_row[j] < bg_row[j]) ? 0 : (raw_row[j] - bg_row[j]);
         }
@@ -122,23 +131,26 @@ void cvBackgroundSubtractFrame(CamFrame frame, FrameInfo info) {
 
 }
 
-void cvMaxPixelFrame(CamFrame frame, FrameInfo info) {
-
-    CamRow *row_array;    
+/**
+ * Find the maximum luminosity pixel in the input frame.
+ *
+ * @param frame - Input frame
+ * @param info - Info struct to populate
+ */
+void cvMaxPixelFrame(CamFrame *frame, FrameInfo info) {
+    
     unsigned int width, height, i, j, max_val, max_loc[2];
-    unsigned char *pixels, val;
+    unsigned char val;    
 
-    width = frame->num_cols;
-    height = frame->num_rows;
-    row_array = frame->rows;
+    width = DS_IMAGE_COLS;
+    height = DS_IMAGE_ROWS;    
     max_val = 0;    
     max_loc[0] = 0;
     max_loc[1] = 1;
 
-    for(i = 0; i < height; i++) {
-        pixels = row_array[i]->pixels;
+    for(i = 0; i < height; i++) {        
         for(j = 0; j < width; j++) {
-            val = pixels[j];
+            val = frame->pixels[i][j];
             if(val > max_val) {
                 max_val = val;
                 max_loc[0] = j;
@@ -153,28 +165,30 @@ void cvMaxPixelFrame(CamFrame frame, FrameInfo info) {
 
 }
 
-void cvCentroidFrame(CamFrame frame, FrameInfo info) {
-
-    CamRow *row_array;
+/**
+ * Find the frame luminosity centroid of the input frame.
+ *
+ * @param frame - Input frame
+ * @param info - Info struct to populate
+ */
+void cvCentroidFrame(CamFrame *frame, FrameInfo info) {
+    
     unsigned long x_acc, y_acc, l_acc, temp;
     unsigned long x_sub_acc, y_sub_acc;
-    unsigned int width, height, i, j, val;
-    unsigned char *pixels;    
+    unsigned int width, height, i, j, val;    
 
     x_acc = 0; // Initialize
     y_acc = 0;
     l_acc = 0;
 
-    width = frame->num_cols; // Read frame info
-    height = frame->num_rows;
-    row_array = frame->rows;
+    width = DS_IMAGE_COLS; // frame->num_cols; // Read frame info
+    height = DS_IMAGE_ROWS; // frame->num_rows;    
     
-    for(i = 0; i < height; i++) {        
-        pixels = row_array[i]->pixels; // Get row pixels
+    for(i = 0; i < height; i++) {            
         x_sub_acc = 0; // Reset subaccumulators
         y_sub_acc = 0;        
         for(j = 0; j < width; j++) {
-            val = pixels[j];
+            val = frame->pixels[i][j];
             x_sub_acc += val*j;
             y_sub_acc += val; // Sum luminosity for multiply later
         }
@@ -203,4 +217,61 @@ void cvCentroidFrame(CamFrame frame, FrameInfo info) {
 
 }
 
-// =========== Private Functions ===============================================
+static void cvRotateFrame(CamFrame *frame, bams16_t theta) {
+
+    float alpha, beta;
+    int horiz_shift, vert_shift;
+    
+    alpha = bams16Tan(theta/2);
+    beta = bams16Sin(theta);
+
+    // Calculate total horizontal shift of upper row
+    horiz_shift = (int) (alpha*(DS_IMAGE_ROWS/2));
+    // Calculate total horizontal shift of right column
+    vert_shift = (int) (beta*(DS_IMAGE_COLS/2));
+    
+    cvShiftHoriz(frame, horiz_shift);
+    cvShiftVert(frame, vert_shift);
+    //cvShiftHoriz(frame, horiz_shift);
+
+}
+
+static void cvShiftHoriz(CamFrame *frame, int num) {
+
+    int shift, half_height, i, width, height;    
+    unsigned char *row;
+    
+    height = (int) DS_IMAGE_ROWS; // frame->num_rows;
+    width = (int) DS_IMAGE_COLS; // frame->num_cols;
+    half_height = (int) height/2;
+    
+    for(i = 0; i < height; i++) {
+            
+        row = frame->pixels[i];
+        shift = ((i - half_height)*num)/half_height;
+        
+        if(shift >= 0) {
+            
+            memmove(row + shift, row, width - shift);
+            memset(row, 0, shift);
+        
+        } else {
+            shift = -shift;
+            memmove(row, row + shift, width - shift);
+            memset(row + width - shift, 0, shift);
+            
+        }
+
+        int j;
+        j = 0;
+
+    }
+
+}
+
+static void cvShiftVert(CamFrame *frame, int num) {
+
+    return;
+
+}
+
