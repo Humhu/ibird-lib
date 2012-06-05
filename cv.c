@@ -38,6 +38,7 @@
 *  Humphrey Hu      2012-02-16      Complete rewrite to use camera driver
 */
 
+#include "attitude.h"
 #include "cv.h"
 #include "cam.h"
 #include "counter.h"
@@ -67,9 +68,17 @@ static void cvMaxPixelFrame(CamFrame *frame, FrameInfo info);
 static void cvRotateFrame(CamFrame *frame, bams16_t theta);
 static void cvShiftHoriz(CamFrame *frame, int num);
 static void cvShiftVert(CamFrame *frame, int num);
-
+static void colShift(CamFrame *frame, unsigned int col, 
+                    unsigned int row_dst, unsigned int row_src, unsigned int num);
+static void colSet(CamFrame *frame, unsigned int col, unsigned int row_dst,
+                    unsigned char val, unsigned int num);
+// static void vertmove(unsigned char *dst, unsigned char *src, 
+                    // unsigned int num, unsigned int width);
+// static void vertset(unsigned char *dst, unsigned char val, 
+                    // unsigned int num, unsigned int width);
+                    
 // Setup the CV module
-void cvSetup(void) {
+void cvSetup(void) {        
     
     is_ready = 0;
     is_running = 0;    
@@ -89,7 +98,7 @@ void cvProcessFrame(CamFrame *frame, FrameInfo info) {
     cvBackgroundSubtractFrame(frame, info);
     cvCentroidFrame(frame, info);
     cvMaxPixelFrame(frame, info);
-    cvRotateFrame(frame, floatToBams16Deg(15));
+    cvRotateFrame(frame, -attGetYawBAMS());
 
 }
 
@@ -230,12 +239,14 @@ static void cvRotateFrame(CamFrame *frame, bams16_t theta) {
     // Calculate total horizontal shift of right column
     vert_shift = (int) (beta*(DS_IMAGE_COLS/2));
     
-    cvShiftHoriz(frame, horiz_shift);
+    cvShiftHoriz(frame, horiz_shift);    
     cvShiftVert(frame, vert_shift);
-    //cvShiftHoriz(frame, horiz_shift);
+    cvShiftHoriz(frame, horiz_shift);
 
 }
 
+// Frame is pointer to CamFrame object
+// num is number of pixels top row (row 0) is shifted to the right
 static void cvShiftHoriz(CamFrame *frame, int num) {
 
     int shift, half_height, i, width, height;    
@@ -250,12 +261,15 @@ static void cvShiftHoriz(CamFrame *frame, int num) {
         row = frame->pixels[i];
         shift = ((i - half_height)*num)/half_height;
         
-        if(shift >= 0) {
+        if(shift == 0) {
+            // Do nothing
+        } else if(shift > 0) {
             
             memmove(row + shift, row, width - shift);
             memset(row, 0, shift);
         
-        } else {
+        } else { // shift < 0
+        
             shift = -shift;
             memmove(row, row + shift, width - shift);
             memset(row + width - shift, 0, shift);
@@ -269,9 +283,124 @@ static void cvShiftHoriz(CamFrame *frame, int num) {
 
 }
 
+// Num is number of pixels leftmost column (col 0) is shifted down
 static void cvShiftVert(CamFrame *frame, int num) {
 
-    return;
+    int shift, half_width, i, width, height;        
+    
+    height = (int) DS_IMAGE_ROWS; // frame->num_rows;
+    width = (int) DS_IMAGE_COLS; // frame->num_cols;
+    half_width = (int) width/2;
+    
+    for(i = 0; i < width; i++) {
+                    
+        shift = ((i - half_width)*num)/half_width;
+        
+        if(shift == 0) {
+            // Do nothing
+        } else if(shift > 0) {
+            
+            colShift(frame, i, 0, shift, height - shift);
+            colSet(frame, i, height - shift, 0, shift); 
+            
+        } else { // shift < 0
+        
+            shift = -shift;
+            colShift(frame, i, shift, 0, height - shift); 
+            colSet(frame, i, 0, 0, shift);
+            
+        }
+
+        int j;
+        j = 0;
+
+    }
 
 }
+
+static void colShift(CamFrame *frame, unsigned int col,
+                    unsigned int row_dst, unsigned int row_src, unsigned int num) {
+
+    int i, shift, step;
+    unsigned int cnt;    
+        
+    shift = row_dst - row_src;
+    
+    if(shift == 0) {
+        return;
+    } else if(shift > 0) { // Start from tail
+        step = -1;
+        i = num - 1;
+    } else { // shift < 0, start from head
+        step = 1;
+        i = 0;
+    }
+    
+    cnt = num;
+    while(cnt--) {
+        frame->pixels[row_dst + i][col] = 
+            frame->pixels[row_src + i][col];
+        i = i + step;
+    }
+    
+}
+
+static void colSet(CamFrame *frame, unsigned int col, unsigned int row_dst,
+                unsigned char val, unsigned int num) {
+
+    unsigned int cnt, i;
+    
+    cnt = num;
+    i = 0;
+    
+    while(cnt--) {
+        frame->pixels[row_dst + i][col] = val;
+        i++;
+    }
+                
+}
+
+//Like memmove but for bytes spaced width apart instead of sequential
+// static void vertmove(unsigned char *dst, unsigned char *src, 
+                    // unsigned int num, unsigned int width) {
+
+    // int i, shift, step;
+    // unsigned int cnt;
+    
+    // shift = dst - src; // Find direction of movement to check for overlap	
+    
+    // if(shift == 0 || num == 0) {
+        // return; 
+    // } else if(shift > 0) { // Start from tail
+        // step = -width;
+        // i = width*(num - 1);
+    // } else { // shift < 0, start from head
+        // step = width;
+        // i = 0;
+    // }
+    
+    // cnt = num;
+    // while(cnt--) {
+        // dst[i] = src[i];
+        // i = i + step;
+    // }
+    
+// }
+
+// static void vertset(unsigned char *dst, unsigned char val, 
+                    // unsigned int num, unsigned int width) {
+
+    // unsigned int cnt, i;
+    
+    // cnt = num;
+    // i = 0;
+    
+    // while(cnt--) {
+    
+        // dst[i] = val;
+        // i = i + width;
+        
+    // }
+                    
+// }
 
