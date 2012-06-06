@@ -72,7 +72,7 @@ void cvSetup(void);
  * @param frame - CamFrame to subtract from processed frames
  * @return Previously used CamFrame
  */
-CamFrame* cvSetBackgroundFrame(CamFrame *frame);
+CamFrame cvSetBackgroundFrame(CamFrame frame);
 
 /**
  * Process a frame and record properties into an info struct.
@@ -80,6 +80,6 @@ CamFrame* cvSetBackgroundFrame(CamFrame *frame);
  * @param frame - CamFrame to process
  * @param info - Pointer to FrameInfoStruct to populate with frame's properties
  */
-void cvProcessFrame(CamFrame *frame, FrameInfo info);
+void cvProcessFrame(CamFrame frame, FrameInfo info);
 
 #endif

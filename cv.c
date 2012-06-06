@@ -50,32 +50,26 @@
 #include <string.h>
 
 #define CV_INFO_BUFFER_SIZE		    (5)
-#define CV_BINARY_CUTOFF_DEFAULT	(140)
-#define CV_BINARY_MIN_DEFAULT		(40)
 
 // State info
 static unsigned char is_ready, is_running;
 
-// Centroid finding variables
-static long centroid_x_acc, centroid_y_acc;
-
-static CamFrame *background_frame;
+static CamFrame background_frame;
 
 // Private functions
-static void cvBackgroundSubtractFrame(CamFrame *frame, FrameInfo info);
-static void cvCentroidFrame(CamFrame *frame, FrameInfo info);
-static void cvMaxPixelFrame(CamFrame *frame, FrameInfo info);
-static void cvRotateFrame(CamFrame *frame, bams16_t theta);
-static void cvShiftHoriz(CamFrame *frame, int num);
-static void cvShiftVert(CamFrame *frame, int num);
-static void colShift(CamFrame *frame, unsigned int col, 
+static void cvBackgroundSubtractFrame(CamFrame frame, FrameInfo info);
+static void cvCentroidFrame(CamFrame frame, FrameInfo info);
+static void cvMaxPixelFrame(CamFrame frame, FrameInfo info);
+static void cvRotateFrame(CamFrame frame, bams16_t theta);
+//static void cvHighPass(CamFrame frame, FrameInfo info);
+
+// Helpers
+static void cvShiftHoriz(CamFrame frame, int num);
+static void cvShiftVert(CamFrame frame, int num);
+static void colShift(CamFrame frame, unsigned int col, 
                     unsigned int row_dst, unsigned int row_src, unsigned int num);
-static void colSet(CamFrame *frame, unsigned int col, unsigned int row_dst,
+static void colSet(CamFrame frame, unsigned int col, unsigned int row_dst,
                     unsigned char val, unsigned int num);
-// static void vertmove(unsigned char *dst, unsigned char *src, 
-                    // unsigned int num, unsigned int width);
-// static void vertset(unsigned char *dst, unsigned char val, 
-                    // unsigned int num, unsigned int width);
                     
 // Setup the CV module
 void cvSetup(void) {        
@@ -84,14 +78,12 @@ void cvSetup(void) {
     is_running = 0;    
        
     background_frame = NULL;
-    centroid_x_acc = 0;
-    centroid_y_acc = 0;
 
     is_ready = 1;
 
 }
 
-void cvProcessFrame(CamFrame *frame, FrameInfo info) {
+void cvProcessFrame(CamFrame frame, FrameInfo info) {
 
     if(!is_ready) { return; } // Module readiness quick fail       
 
@@ -99,12 +91,12 @@ void cvProcessFrame(CamFrame *frame, FrameInfo info) {
     cvCentroidFrame(frame, info);
     cvMaxPixelFrame(frame, info);
     cvRotateFrame(frame, -attGetYawBAMS());
-
+    //cvRotateFrame(frame, floatToBams16Deg(15));
 }
 
-CamFrame* cvSetBackgroundFrame(CamFrame *frame) {
+CamFrame cvSetBackgroundFrame(CamFrame frame) {
 
-    CamFrame *old;
+    CamFrame old;
 
     old = background_frame;
     background_frame = frame;
@@ -120,7 +112,7 @@ CamFrame* cvSetBackgroundFrame(CamFrame *frame) {
  * @param frame - Input frame
  * @param info - Info struct to populate
  */
-void cvBackgroundSubtractFrame(CamFrame *frame, FrameInfo info) {
+void cvBackgroundSubtractFrame(CamFrame frame, FrameInfo info) {
 
     unsigned int i, j, width, height;
     unsigned char *raw_row, *bg_row;    
@@ -146,7 +138,7 @@ void cvBackgroundSubtractFrame(CamFrame *frame, FrameInfo info) {
  * @param frame - Input frame
  * @param info - Info struct to populate
  */
-void cvMaxPixelFrame(CamFrame *frame, FrameInfo info) {
+void cvMaxPixelFrame(CamFrame frame, FrameInfo info) {
     
     unsigned int width, height, i, j, max_val, max_loc[2];
     unsigned char val;    
@@ -180,7 +172,7 @@ void cvMaxPixelFrame(CamFrame *frame, FrameInfo info) {
  * @param frame - Input frame
  * @param info - Info struct to populate
  */
-void cvCentroidFrame(CamFrame *frame, FrameInfo info) {
+void cvCentroidFrame(CamFrame frame, FrameInfo info) {
     
     unsigned long x_acc, y_acc, l_acc, temp;
     unsigned long x_sub_acc, y_sub_acc;
@@ -226,7 +218,7 @@ void cvCentroidFrame(CamFrame *frame, FrameInfo info) {
 
 }
 
-static void cvRotateFrame(CamFrame *frame, bams16_t theta) {
+static void cvRotateFrame(CamFrame frame, bams16_t theta) {
 
     float alpha, beta;
     int horiz_shift, vert_shift;
@@ -247,7 +239,7 @@ static void cvRotateFrame(CamFrame *frame, bams16_t theta) {
 
 // Frame is pointer to CamFrame object
 // num is number of pixels top row (row 0) is shifted to the right
-static void cvShiftHoriz(CamFrame *frame, int num) {
+static void cvShiftHoriz(CamFrame frame, int num) {
 
     int shift, half_height, i, width, height;    
     unsigned char *row;
@@ -284,7 +276,7 @@ static void cvShiftHoriz(CamFrame *frame, int num) {
 }
 
 // Num is number of pixels leftmost column (col 0) is shifted down
-static void cvShiftVert(CamFrame *frame, int num) {
+static void cvShiftVert(CamFrame frame, int num) {
 
     int shift, half_width, i, width, height;        
     
@@ -318,7 +310,7 @@ static void cvShiftVert(CamFrame *frame, int num) {
 
 }
 
-static void colShift(CamFrame *frame, unsigned int col,
+static void colShift(CamFrame frame, unsigned int col,
                     unsigned int row_dst, unsigned int row_src, unsigned int num) {
 
     int i, shift, step;
@@ -345,7 +337,7 @@ static void colShift(CamFrame *frame, unsigned int col,
     
 }
 
-static void colSet(CamFrame *frame, unsigned int col, unsigned int row_dst,
+static void colSet(CamFrame frame, unsigned int col, unsigned int row_dst,
                 unsigned char val, unsigned int num) {
 
     unsigned int cnt, i;
@@ -359,48 +351,3 @@ static void colSet(CamFrame *frame, unsigned int col, unsigned int row_dst,
     }
                 
 }
-
-//Like memmove but for bytes spaced width apart instead of sequential
-// static void vertmove(unsigned char *dst, unsigned char *src, 
-                    // unsigned int num, unsigned int width) {
-
-    // int i, shift, step;
-    // unsigned int cnt;
-    
-    // shift = dst - src; // Find direction of movement to check for overlap	
-    
-    // if(shift == 0 || num == 0) {
-        // return; 
-    // } else if(shift > 0) { // Start from tail
-        // step = -width;
-        // i = width*(num - 1);
-    // } else { // shift < 0, start from head
-        // step = width;
-        // i = 0;
-    // }
-    
-    // cnt = num;
-    // while(cnt--) {
-        // dst[i] = src[i];
-        // i = i + step;
-    // }
-    
-// }
-
-// static void vertset(unsigned char *dst, unsigned char val, 
-                    // unsigned int num, unsigned int width) {
-
-    // unsigned int cnt, i;
-    
-    // cnt = num;
-    // i = 0;
-    
-    // while(cnt--) {
-    
-        // dst[i] = val;
-        // i = i + width;
-        
-    // }
-                    
-// }
-
