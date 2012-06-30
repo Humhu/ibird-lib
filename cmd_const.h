@@ -44,7 +44,7 @@
 #ifndef __CMD_CONST_H
 #define __CMD_CONST_H
 
-#define MAX_CMD_FUNC_SIZE               (0x50) // 0x00 - 0x3F
+#define MAX_CMD_FUNC_SIZE               (0x60) // 0x00 - 0x3F
 
 // CMD values of 0x00(0) - 0x3F(127) are defined here
 // Values 0x00 through 0x10 are reserved for bootloader
@@ -61,7 +61,7 @@
 
 #define CMD_ECHO                        (0x1F)      // send back the received packet
 
-#define CMD_SET_REGULATOR_STATE         (0x21)      // Set the regulator module running
+#define CMD_SET_REGULATOR_MODE          (0x21)      // Set the regulator mode
 #define CMD_SET_REGULATOR_REF           (0x22)      // Set the regulator references
 #define CMD_SET_REGULATOR_PID           (0x23)      // Set regulator PID parameters
 #define CMD_SET_REGULATOR_RATE_FILTER   (0x24)      // Set yaw filter coefficients
@@ -73,9 +73,9 @@
 #define CMD_RUN_GYRO_CALIB              (0x2A)      // Begin gyroscope calibration procedure
 #define CMD_GET_GYRO_CALIB_PARAM        (0x2B)      // get gyroscope calibration offset
 
-#define CMD_SET_ESTIMATE_RUNNING        (0x2C)
+#define CMD_SET_ESTIMATE_RUNNING        (0x2C)      // Begin attitude estimation
 #define CMD_REQUEST_TELEMETRY           (0x2D)      // Request state update
-#define CMD_RESPONSE_TELEMETRY          (0x2E)      // 
+#define CMD_RESPONSE_TELEMETRY          (0x2E)      // Response to state update request
 #define CMD_RECORD_TELEMETRY            (0x2F)      // Save telemetry to flash
 
 #define CMD_ADDRESS_REQUEST             (0x30)      // Request an address from network coordinator
@@ -88,18 +88,22 @@
 #define CMD_DIR_DUMP_REQUEST            (0x36)      // Request a full directory update
 #define CMD_DIR_DUMP_RESPONSE           (0x37)      // A full directory update
 
-#define CMD_CLOCK_UPDATE_REQUEST        (0x38)      // Frame clock sync
-#define CMD_CLOCK_UPDATE_RESPONSE       (0x39)
+#define CMD_CLOCK_UPDATE_REQUEST        (0x38)      // Request for clock update process
+#define CMD_CLOCK_UPDATE_RESPONSE       (0x39)      // Response to clock update request
 
-#define CMD_RAW_FRAME_REQUEST           (0x40)
-#define CMD_RAW_FRAME_RESPONSE          (0x41)
-#define CMD_CENTROID_REPORT             (0x42)
-#define CMD_SET_BACKGROUND_FRAME        (0x43)
+#define CMD_RAW_FRAME_REQUEST           (0x40)      // Request for raw frame transmission
+#define CMD_RAW_FRAME_RESPONSE          (0x41)      // Response to request for raw frame
+#define CMD_CENTROID_REPORT             (0x42)      // Report of centroid info
+#define CMD_SET_BACKGROUND_FRAME        (0x43)      // Capture and set background frame
 
-#define CMD_CAM_PARAM_REQUEST           (0x48)
-#define CMD_CAM_PARAM_RESPONSE          (0x49)
+#define CMD_CAM_PARAM_REQUEST           (0x48)      // Request camera parameters
+#define CMD_CAM_PARAM_RESPONSE          (0x49)      // Response to camera parameter request
+#define CMD_SET_HP                      (0x4A)      // Set CV high pass on/off
 
+#define CMD_ZERO_ESTIMATE               (0x4C)      // Zero attitude estimate
 
+#define CMD_REQUEST_ATTITUDE            (0x50)      // Request attitude
+#define CMD_RESPONSE_ATTITUDE           (0x51)      // Response to request for attitude
 // CMD values of 0x80(128) - 0xEF(239) are reserved.
 // CMD values of 0xF0(240) - 0xFF(255) are reserved for future use
 

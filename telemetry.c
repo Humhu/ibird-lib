@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Regents of the University of California
+ * Copyright (c) 2011-2012, Regents of the University of California
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,12 +51,13 @@
 #include "attitude.h"
 #include "behavior.h"
 #include "counter.h"
-
+#include <string.h>
 #include "cmd_const.h"
 
 // Function stubs
-void telemPopulateA(TelemetryStructA*); // Not yet implemented
-void telemPopulateB(TelemetryStructB*); 
+void telemPopulateA(TelemetryA); // Not yet implemented
+void telemPopulateB(TelemetryB); 
+void telemPopulateAttitude(TelemetryAttitude);
 
 // Function bodies
 // TODO: Implement!
@@ -77,30 +78,62 @@ void telemSendB(unsigned int addr) {
 	// Create a radio packet
 	packet = radioRequestPacket(TELEMETRY_B_SIZE);
 	if(packet == NULL) { return; }
-        macSetDestAddr(packet, addr);
-        macSetDestPan(packet, netGetLocalPanID());
+    macSetDestAddr(packet, addr);
+    macSetDestPan(packet, netGetLocalPanID());
 
 	// Write the telemetry struct into the packet payload
 	pld = macGetPayload(packet);
 	paySetType(pld, CMD_RESPONSE_TELEMETRY);
 	paySetData(pld, TELEMETRY_B_SIZE, (unsigned char *) &telemetryB);
-	 if(!radioEnqueueTxPacket(packet)) {
-		 radioReturnPacket(packet);	// Delete packet if append fails
-	 }
+	if(!radioEnqueueTxPacket(packet)) {
+		radioReturnPacket(packet);	// Delete packet if append fails
+	}
 	
 }
 
-void telemPopulateA(TelemetryStructA *telemetry) {
+void telemSendAttitude(unsigned int addr) {
+
+    MacPacket packet;
+	Payload pld;
+	TelemetryStructAttitude telemetryAtt;
+	
+	// Populate the telemetry fields
+	telemPopulateAttitude(&telemetryAtt);
+	
+	// Create a radio packet
+	packet = radioRequestPacket(TELEMETRY_ATT_SIZE);
+	if(packet == NULL) { return; }
+    macSetDestAddr(packet, addr);
+    macSetDestPan(packet, netGetLocalPanID());
+
+	// Write the telemetry struct into the packet payload
+	pld = macGetPayload(packet);
+	paySetType(pld, CMD_RESPONSE_ATTITUDE);
+	paySetData(pld, TELEMETRY_ATT_SIZE, (unsigned char *) &telemetryAtt);
+	if(!radioEnqueueTxPacket(packet)) {
+        radioReturnPacket(packet);	// Delete packet if append fails
+	}
+	
+}
+
+void telemPopulateA(TelemetryA telemetry) {
 
 }
 
-void telemPopulateB(TelemetryStructB *telemetry) {	    
+void telemPopulateB(TelemetryB telemetry) {	    
 
-    telemetry->time = sclockGetGlobalTicks();
-    telemetry->pose[0] = attGetYawBAMS();
-    telemetry->pose[1] = attGetPitchBAMS();
-    telemetry->pose[2] = attGetRollBAMS();
+    RegulatorStateStruct state;
+
+    rgltrGetState(&state);
+    memcpy(telemetry, &state, sizeof(RegulatorStateStruct));
+
+}
+
+void telemPopulateAttitude(TelemetryAttitude att) {
+
+    Quaternion pose;
     
-    return;
-	
+    attGetQuat(&pose);
+    memcpy(att, &pose, sizeof(Quaternion));    
+
 }

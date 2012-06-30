@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2009 - 2012, Regents of the University of California
  * All rights reserved.
  *
@@ -34,96 +34,106 @@
  * v.beta
  *
  * Revisions:
- *  Stanley S. Baek      2009-10-30     Initial release
- *  Humphrey Hu		 2011-7-20      Changed to fixed point
- *  Humphrey Hu          2012-2-20      Returned to floating point, restructured
- *                                      and cleaned up states
+ *  Stanley S. Baek     2009-10-30     Initial release
+ *  Humphrey Hu		    2011-7-20      Changed to fixed point
+ *  Humphrey Hu         2012-2-20      Returned to floating point, restructured
  */
 
-#include "controller.h"
-#include "dsp.h"
-#include "attitude.h"
+// Software modules
 #include "regulator.h"
-#include "utils.h"
-#include "motor_ctrl.h"
-#include "led.h"
-#include "sys_clock.h"
-#include "gyro.h"
-#include "xl.h"
-#include "telemetry.h"
-#include <stdlib.h>
-#include "bams.h"
+#include "controller.h"
+#include "dfilter.h"
+#include "attitude.h"
 #include "cv.h"
 
-// ==== Constants ==============================================================
+// Hardware/actuator interface
+#include "motor_ctrl.h"
+#include "sync_servo.h"
+#include "led.h"
 
-// ==== Static Variables =======================================================
+// Other
+#include "sys_clock.h"
+#include "bams.h"
+#include "utils.h"
+#include "pbuff.h"
+#include <stdlib.h>
+#include <string.h>
+
 typedef struct {
     float thrust;
     float steer;
-} ControlOutput;
+    float elevator;
+} RegulatorOutput;
+
+#define REG_BUFF_SIZE       (25)
+
+// =========== Static Variables ================================================
 
 // Lower level components
-CtrlPidParam yawPid, pitchPid, rollPid;
+CtrlPidParamStruct yawPid, pitchPid, rollPid;
 DigitalFilter yawRateFilter, pitchRateFilter, rollRateFilter;
 
 // State info
 static unsigned char is_ready = 0;
-static RegulatorState reg_state = REG_OFF;
-static ControlOutput rc_outputs;
-/*-----------------------------------------------------------------------------
- *          Declaration of static functions
------------------------------------------------------------------------------*/
+static RegulatorMode reg_mode;
+static RegulatorOutput rc_outputs;
 
+static RegulatorStateStruct reg_state[REG_BUFF_SIZE];
+static PoolBuffStruct reg_state_buff;
+
+// =========== Function Stubs =================================================
 static float runYawControl(float yaw);
 static float runPitchControl(float pitch);
 
-/*-----------------------------------------------------------------------------
- *          Public functions
------------------------------------------------------------------------------*/
+// =========== Public Functions ===============================================
 
 void rgltrSetup(float ts) {
 
+    unsigned int i;
+    RegulatorState states[REG_BUFF_SIZE];
+
     is_ready = 0;
-    reg_state = REG_OFF;
+    reg_mode = REG_OFF;
         
     mcSetup();  // Set up motor driver
-    
-    yawPid = ctrlCreatePidParams(ts);
-    if(yawPid == NULL) { return; }
-    pitchPid = ctrlCreatePidParams(ts);
-    if(pitchPid == NULL) { return; }
-    rollPid = ctrlCreatePidParams(ts);
-    if(rollPid == NULL) { return; }
+
+    ctrlInitPidParams(&yawPid, ts);
+    ctrlInitPidParams(&pitchPid, ts);
+    ctrlInitPidParams(&rollPid, ts);
 
     yawRateFilter = NULL;
     pitchRateFilter = NULL;
     rollRateFilter = NULL;
 
+    for(i = 0; i < REG_BUFF_SIZE; i++) {
+        states[i] = &reg_state[i];
+    }
+    pbuffInit(&reg_state_buff, REG_BUFF_SIZE, states);
+    
     is_ready = 1;
 }
 
-void rgltrSetState(unsigned char flag) {
+void rgltrSetMode(unsigned char flag) {
 
     if(flag == REG_OFF) {
-        reg_state = flag;
-        ctrlStop(yawPid);
-        ctrlStop(pitchPid);
+        reg_mode = flag;
+        ctrlStop(&yawPid);
+        ctrlStop(&pitchPid);
     } else if(flag == REG_TRACK) {
-        reg_state = flag;
-        ctrlStart(yawPid);
-        ctrlStart(pitchPid);
+        reg_mode = flag;
+        ctrlStart(&yawPid);
+        ctrlStart(&pitchPid);
     } else if(flag == REG_REMOTE_CONTROL) {
-        reg_state = flag;
-        ctrlStop(yawPid);
-        ctrlStop(pitchPid);
+        reg_mode = flag;
+        ctrlStop(&yawPid);
+        ctrlStop(&pitchPid);
     }
         
 }
 
 void rgltrSetYawRateFilter(RateFilterParams params) {
 
-    yawRateFilter = dspCreateFilter(params->order, params->type,
+    yawRateFilter = dfilterCreate(params->order, params->type,
                                     params->xcoeffs, params->ycoeffs);
     
 } 
@@ -131,140 +141,179 @@ void rgltrSetYawRateFilter(RateFilterParams params) {
 
 void rgltrSetPitchRateFilter(RateFilterParams params) {
 
-    pitchRateFilter = dspCreateFilter(params->order, params->type,
+    pitchRateFilter = dfilterCreate(params->order, params->type,
                                     params->xcoeffs, params->ycoeffs);
 
 } 
 
 void rgltrSetRollRateFilter(RateFilterParams params) {
 
-    rollRateFilter = dspCreateFilter(params->order, params->type,
+    rollRateFilter = dfilterCreate(params->order, params->type,
                                     params->xcoeffs, params->ycoeffs);
 
 }
 
 void rgltrSetYawPid(PidParams params) {
     
-    ctrlSetPidParams(yawPid, params->ref, params->kp, params->ki, params->kd);
-    ctrlSetPidOffset(yawPid, params->offset);
-    ctrlSetRefWeigts(yawPid, params->beta, params->gamma);
-    ctrlSetSaturation(yawPid, 100, -100);
+    ctrlSetPidParams(&yawPid, params->ref, params->kp, params->ki, params->kd);
+    ctrlSetPidOffset(&yawPid, params->offset);
+    ctrlSetRefWeigts(&yawPid, params->beta, params->gamma);
+    ctrlSetSaturation(&yawPid, 100, -100);
 
 }
 
 void rgltrSetPitchPid(PidParams params) {
     
-    ctrlSetPidParams(pitchPid, params->ref, params->kp, params->ki, params->kd);
-    ctrlSetPidOffset(pitchPid, params->offset);
-    ctrlSetRefWeigts(pitchPid, params->beta, params->gamma);
-    ctrlSetSaturation(pitchPid, 100, 0);
+    ctrlSetPidParams(&pitchPid, params->ref, params->kp, params->ki, params->kd);
+    ctrlSetPidOffset(&pitchPid, params->offset);
+    ctrlSetRefWeigts(&pitchPid, params->beta, params->gamma);
+    ctrlSetSaturation(&pitchPid, 100, 0);
 
 }
 
 void rgltrSetRollPid(PidParams params) {
 
-    ctrlSetPidParams(rollPid, params->ref, params->kp, params->ki, params->kd);
-    ctrlSetPidOffset(rollPid, params->offset);
-    ctrlSetRefWeigts(rollPid, params->beta, params->gamma);
-    ctrlSetSaturation(rollPid, 100, -100);
+    ctrlSetPidParams(&rollPid, params->ref, params->kp, params->ki, params->kd);
+    ctrlSetPidOffset(&rollPid, params->offset);
+    ctrlSetRefWeigts(&rollPid, params->beta, params->gamma);
+    ctrlSetSaturation(&rollPid, 100, -100);
 
 }
 
 void rgltrSetYawRef(float ref) {
-    ctrlSetRef(yawPid, ref);
+    ctrlSetRef(&yawPid, ref);
 }
 
 void rgltrSetPitchRef(float ref) {
-    ctrlSetRef(pitchPid, ref);	
+    ctrlSetRef(&pitchPid, ref);
 }
 
 void rgltrSetRollRef(float ref) {
-    ctrlSetRef(rollPid, ref);
+    ctrlSetRef(&rollPid, ref);
 }
 
-void rgltrSetRemoteControlValues(float thrust, float steer) {
+void rgltrSetRemoteControlValues(float thrust, float steer, float elevator) {
 
     rc_outputs.thrust = thrust;
     rc_outputs.steer = steer;
+    rc_outputs.elevator = elevator;
+
+}
+
+void rgltrGetState(RegulatorState dst) {
+
+    RegulatorState src;
+
+    src = pbuffGetOldestActive(&reg_state_buff);
+    if(src == NULL) { 
+        memset(dst, 0, sizeof(RegulatorStateStruct));
+        return; 
+    }
+    
+    memcpy(dst, src, sizeof(RegulatorStateStruct));
+
+    pbuffReturn(&reg_state_buff, src);
     
 }
 
 void rgltrRunController(void) {
-
-    unsigned long time;
-    float steer, thrust;
+    
+    float steer, thrust, elevator;
     PoseEstimateStruct pose;    
-
-    if(!is_ready) { return; }   // Don't run if not ready
-    if(reg_state == REG_OFF) { return; } // Don't run if not running
-
-    time = sclockGetGlobalTicks(); // Record system time
+    RegulatorState state;
+    
+    if(!is_ready) { return; }   // Don't run if not ready    
 
     steer = 0.0;
     thrust = 0.0;
+    elevator = 1.0;
+    
     pose.yaw = 0.0; // Initialize to make optimizer happy
     pose.pitch = 0.0;
+    pose.roll = 0.0;
+    attGetPose(&pose);
 
-    if(reg_state == REG_REMOTE_CONTROL) {
+    if(reg_mode == REG_OFF) { 
+        
+        steer = 0.0;
+        thrust = 0.0;
+        elevator = 0.0;
+        
+    } else if(reg_mode == REG_REMOTE_CONTROL) {
 
         steer = rc_outputs.steer;
         thrust = rc_outputs.thrust;
+        elevator = rc_outputs.elevator;
 
-    } else if(reg_state == REG_TRACK){
+    } else if(reg_mode == REG_TRACK){
 
         steer = runYawControl(pose.yaw);
         thrust = runPitchControl(pose.pitch);
+        elevator = rc_outputs.elevator;
         // ? = runRollControl(roll); // No roll actuator yet
 
     }
 
-    // TODO: Roll control mixing
+    state = pbuffForceGetIdleOldest(&reg_state_buff);
+    if(state != NULL) {
+        state->time = sclockGetLocalTicks();
+        state->ref[0] = ctrlGetRef(&yawPid);
+        state->ref[1] = ctrlGetRef(&pitchPid);
+        state->ref[2] = ctrlGetRef(&rollPid);
+        state->x[0] = pose.yaw;
+        state->x[1] = pose.pitch;
+        state->x[2] = pose.roll;
+        state->u[0] = thrust;
+        state->u[1] = steer;
+        state->u[2] = elevator;
+        pbuffAddActive(&reg_state_buff, (void*) state);
+    }
+    
+    
     mcSteer(steer);
-    mcThrust(thrust);
+    mcThrust(thrust); // Motor is reversed
+    servoSet(elevator);
     
 }
 
 
-// ==== Private Methods ========================================================
+// =========== Private Functions ===============================================
 
 static float runYawControl(float yaw) {
 
     float u;
 
-    if (ctrlIsRunning(yawPid) == 0) {
-        return 0;	    
-    } else {
-        // take care of motor backlash by scaling u.
-        // the dead zone of tail prop is +-15% duty cycle.
-        u = ctrlRunPid(yawPid, yaw, yawRateFilter);        
-        // TODO: Generalize!
-        if (u > 5) {
-            return u*0.85 + 15;
-        } else if (u < -5) {		
-            return u*0.85 - 15;
-        } else {
-            return u;
-        }
+    if (!ctrlIsRunning(&yawPid)) {
+        u = 0.0;
+    } else {        
+        u = ctrlRunPid(&yawPid, yaw, yawRateFilter);                
     }    
+
+    return u;
 
 }
 
 
 static float runPitchControl(float pitch) {
 
-    if (!ctrlIsRunning(pitchPid)) {
-        return 0.0;
+    float u;
+
+    if (!ctrlIsRunning(&pitchPid)) {
+        u = 0.0;
     } else {
-        return ctrlRunPid(pitchPid, pitch, pitchRateFilter);
+        u = ctrlRunPid(&pitchPid, pitch, pitchRateFilter);
     }
+
+    return u;
+    
 }
 
 //static float runRollControl(float roll) {
 //
-//    if(!ctrlIsRunning(rollPid)) {
+//    if(!ctrlIsRunning(&rollPid)) {
 //        return 0.0;
 //    } else {
-//        return ctrlRunPid(rollPid, roll, rollRateFilter);
+//        return ctrlRunPid(&rollPid, roll, rollRateFilter);
 //    }
 //
 //}
