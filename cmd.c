@@ -131,7 +131,7 @@ static void cmdDirDumpResponse(MacPacket packet);
 static void cmdRequestClockUpdate(MacPacket packet);
 static void cmdResponseClockUpdate(MacPacket packet);
 
-static void cmdSetRegulatorState(MacPacket packet);
+static void cmdSetRegulatorMode(MacPacket packet);
 static void cmdSetRegulatorRef(MacPacket packet);
 static void cmdSetRegulatorPid(MacPacket packet);
 static void cmdSetRegulatorRateFilter(MacPacket packet);
@@ -156,6 +156,10 @@ static void cmdGetGyroCalibParam(MacPacket packet);
 static void cmdSetEstimateRunning(MacPacket packet);
 
 static void cmdSetHP(MacPacket packet);
+
+static void cmdZeroEstimate(MacPacket packet);
+static void cmdRequestAttitude(MacPacket packet);
+static void cmdResponseAttitude(MacPacket packet);
 
 static void cmdEcho(MacPacket packet);
 static void cmdNop(MacPacket packet);
@@ -191,7 +195,7 @@ unsigned int cmdSetup(unsigned int queue_size) {
 
     cmd_func[CMD_ECHO] = &cmdEcho;
 
-    cmd_func[CMD_SET_REGULATOR_STATE] = &cmdSetRegulatorState;
+    cmd_func[CMD_SET_REGULATOR_MODE] = &cmdSetRegulatorMode;
     cmd_func[CMD_SET_REGULATOR_REF] = &cmdSetRegulatorRef;
     cmd_func[CMD_SET_REGULATOR_PID] = &cmdSetRegulatorPid;
     cmd_func[CMD_SET_REGULATOR_RATE_FILTER] = &cmdSetRegulatorRateFilter;
@@ -213,8 +217,12 @@ unsigned int cmdSetup(unsigned int queue_size) {
     cmd_func[CMD_RUN_GYRO_CALIB] = &cmdRunGyroCalib;
     cmd_func[CMD_GET_GYRO_CALIB_PARAM] = &cmdGetGyroCalibParam;
 
-    cmd_func[CMD_SET_HP] = &cmdSetHP;
-
+    
+    cmd_func[CMD_ZERO_ESTIMATE] = &cmdZeroEstimate;
+    cmd_func[CMD_REQUEST_ATTITUDE] = &cmdRequestAttitude;
+    cmd_func[CMD_RESPONSE_ATTITUDE] = &cmdResponseAttitude;
+    
+>>>>>>> master
     return 1;
     
 }
@@ -386,7 +394,7 @@ static void cmdResponseClockUpdate(MacPacket packet) {
 
 // ====== Regulator and Control ===============================================
 
-static void cmdSetRegulatorState(MacPacket packet) {
+static void cmdSetRegulatorMode(MacPacket packet) {
     
     Payload pld = macGetPayload(packet);
     //unsigned char status = payGetStatus(pld);
@@ -394,7 +402,7 @@ static void cmdSetRegulatorState(MacPacket packet) {
     
     unsigned char flag = frame[0];
 
-    rgltrSetState(flag);
+    rgltrSetMode(flag);
     
 }
 
@@ -580,17 +588,12 @@ static void cmdGetMemContents(MacPacket packet) {
 
 static void cmdRunGyroCalib(MacPacket packet) {
     
-    //Payload pld = macGetPayload(packet);
-    //unsigned char status = payGetStatus(pld);
-    //unsigned char* frame = payGetData(pld);
+    Payload pld = macGetPayload(packet);
+    unsigned char status = payGetStatus(pld);
+    unsigned int* frame = (unsigned int*) payGetData(pld);
     
-    //unsigned int count = frame[0] + (frame[1] << 8);
-    LED_ORANGE = 1;
-    LED_GREEN = 1;
-    LED_RED = 0;
-//    gyroRunCalib(count);
-    LED_ORANGE = 0;
-    LED_GREEN = 0;
+    unsigned int count = frame[0];    
+    gyroRunCalib(count);    
 
 }
 
@@ -651,7 +654,7 @@ static void cmdSetEstimateRunning(MacPacket packet) {
 static void cmdRequestRawFrame(MacPacket packet) {
     
     unsigned int srcAddr, srcPan, height, width, i, temp;
-    unsigned int sent, to_send, block_size = 50;
+    unsigned int sent, to_send, block_size = 75;
     MacPacket response;
     Payload pld;
     CamFrame frame;
@@ -668,8 +671,8 @@ static void cmdRequestRawFrame(MacPacket packet) {
 
     cvProcessFrame(frame, &info);    
 
-    height = DS_IMAGE_ROWS; //frame->num_rows;
-    width = DS_IMAGE_COLS; //frame->num_cols;
+    height = DS_IMAGE_ROWS;
+    width = DS_IMAGE_COLS;
 
     for(i = 0; i < height; i++) {        
         row = &(frame->pixels[i]);
@@ -684,7 +687,7 @@ static void cmdRequestRawFrame(MacPacket packet) {
             macSetDestPan(response, srcPan);
             temp = frame->frame_num;
             paySetData(pld, 2, (unsigned char *)&temp);
-            temp = i; // row->row_num;
+            temp = i;
             payAppendData(pld, 2, 2, (unsigned char*)&temp);
             temp = width - to_send;
             payAppendData(pld, 4, 2, (unsigned char*)&temp);
@@ -794,6 +797,27 @@ static void cmdCamParamResponse(MacPacket packet) {
     lstrobeSetParam(&lstrobe_params);
     lstrobeStart();
     
+}
+
+static void cmdZeroEstimate(MacPacket packet) {
+
+    attReset();
+    //xlReadXYZ();
+    //attZero();
+
+}
+
+static void cmdRequestAttitude(MacPacket packet) {
+
+    telemSendAttitude(macGetSrcAddr(packet));
+
+}
+
+static void cmdResponseAttitude(MacPacket packet) {
+
+    // Write me!
+    return;
+
 }
 
 /*-----------------------------------------------------------------------------

@@ -90,15 +90,15 @@
 #include <string.h>
 
 // ==== CONSTANTS =============================================
-#define FCY                         (40000000) // 40 MIPS   
-#define REG_FCY                     (200)
-#define RADIO_FCY                   (200) // Merge?
-#define RADIO_TX_QUEUE_SIZE         (40)
-#define RADIO_RX_QUEUE_SIZE         (20) 
-#define DEFAULT_SYNC_ADDR           (0x1021)
-#define DEFAULT_SYNC_PAN            (0x1001)
+#define FCY                         (40000000)  // 40 MIPS   
+#define REG_FCY                     (200)       // 200 Hz
+#define RADIO_FCY                   (250)       // 250 Hz
+#define RADIO_TX_QUEUE_SIZE         (40)        // 40 Outgoing
+#define RADIO_RX_QUEUE_SIZE         (40)        // 40 Incoming
+
 #define DIRECTORY_SIZE              (10)
-#define NUM_CAM_FRAMES              (4)
+#define NUM_CAM_FRAMES              (1)         // Camera driver frames
+
 // ==== FUNCTION STUBS =========================================
 static void processRadioBuffer(void);
 
@@ -114,19 +114,17 @@ void _T6Interrupt(void);
 
 // ==== STATIC VARIABLES =======================================
 
-static CamFrameStruct cam_frames[2];
+static CamFrameStruct cam_frames[NUM_CAM_FRAMES];
 
 // ==== FUNCTION BODIES ========================================
 int main(void) {
  
     unsigned long prev_millis, now, last_packet;
-    unsigned char led_state, temp;
-    unsigned int phase, i, size, address;
-    float steer, thrust;
-    bams16_t theta, omega;
-    MacPacket packet;
-    Payload pld;    
-   
+    unsigned char led_state;
+    unsigned int phase;
+    // CamFrame frame;
+    // FrameInfoStruct info;
+
     prev_millis = 0;
     led_state = 0;    
     last_packet = 0;
@@ -135,6 +133,7 @@ int main(void) {
 
     // Non-time-critical background tasks
     while(1) {
+    
         processRadioBuffer();
         cmdProcessBuffer();
 
@@ -150,56 +149,11 @@ int main(void) {
             led_state = 0;
         }
 
-        CamFrame frame;
-        FrameInfoStruct info;
-
-        frame = camGetFrame();
-        if(frame != NULL) {
-            cvProcessFrame(frame, &info);
-        }
-        camReturnFrame(frame);
-
-        if(netGetLocalAddress() != 0x1021) { continue; }
-        continue;
-
-        theta = omega*now;
-        steer = 100*bams16Sin(theta);
-
-        size = dirGetSize();
-        DirEntry entries[size];
-        dirGetEntries(entries);
-
-        if(now - last_packet < 300) { continue; }
-        last_packet = now;
-
-        size = 1;
-        for(i = 0; i < size; i++) {
-            address = entries[i]->address;
-            if(address == netGetLocalAddress()) { continue; }
-            if(address == netGetBaseAddress()) { continue; }
-            
-            temp = 2;
-            packet = radioRequestPacket(2);
-            if(packet == NULL) { continue; }
-            macSetDestAddr(packet, address);
-            pld = macGetPayload(packet);
-            paySetType(pld, CMD_SET_REGULATOR_STATE);
-            paySetData(pld, 2, (unsigned char*)&temp);
-            if(!radioEnqueueTxPacket(packet)) {
-                radioReturnPacket(packet);
-            }
-
-            packet = radioRequestPacket(8);
-            if(packet == NULL) { continue; }
-            macSetDestAddr(packet, address);
-            pld = macGetPayload(packet);
-            paySetType(pld, CMD_SET_RC_VALUES);
-            paySetData(pld, 4, (unsigned char*)&thrust);
-            payAppendData(pld, 4, 4, (unsigned char*)&steer);
-            if(!radioEnqueueTxPacket(packet)) {
-                radioReturnPacket(packet);
-            }
-        }
+        // frame = camGetFrame();
+        // if(frame != NULL) {
+            // cvProcessFrame(frame, &info);
+        // }
+        // camReturnFrame(frame);
 
     }
 
@@ -212,7 +166,7 @@ void processRadioBuffer(void) {
     packet = radioDequeueRxPacket();
     if(packet == NULL) { return; }
 
-    // If queue fails, clean up radio
+    // If enqueue fails, clean up packet
     if(cmdQueuePacket(packet) == 0) {
         radioReturnPacket(packet);
     }
@@ -240,17 +194,14 @@ void setupAll(void) {
     // Note: OV7660 I2C operates at 100 kHz on the same bus
     // as the accelerometer. Make sure to set up camera module first!
     dfmemSetup(); // Flash memory device
-    camSetup(cam_frames, 2); // Camera device
-
-    //lstrobeSetup();
-    servoSetup();
-
-    // TODO: Move into generic IMU superclass
+    camSetup(cam_frames, NUM_CAM_FRAMES); // Camera device
+    servoSetup(); // Soft servo control
+    
     xlSetup();
     xlSetRange(16); // +- 16 g range
     xlSetOutputRate(0, 0x0c); // 800 Hz
     gyroSetup();
-    gyroRunCalib(400);
+    gyroSetDeadZone(35);
 
     // Seeds random number generation using IMU sensors
     setRandomSeed(); 
@@ -275,16 +226,16 @@ void setupAll(void) {
     
     cvSetup(); // Set up computer vision module
 
-    clksyncSetup();
-    clksyncSetMasterAddr(DEFAULT_SYNC_ADDR, DEFAULT_SYNC_PAN);
-    attemptClockSync();
+//    clksyncSetup();
+//    clksyncSetMasterAddr(DEFAULT_SYNC_ADDR, DEFAULT_SYNC_PAN);
+//    attemptClockSync();
 
     LED_RED = 1; // Third stage initialization clear
 
     // Indicate set up completion
     for(i = 0; i < 4; i++) {
         delay_ms(25);
-        //LED_RED = ~LED_RED;
+        LED_RED = ~LED_RED;
         delay_ms(25);
         LED_GREEN = ~LED_GREEN;
         delay_ms(25);
@@ -358,9 +309,8 @@ static void attemptClockSync(void) {
  */
 void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
 
-    xlReadXYZ();
-    //gyroReadXYZ();
-    gyroReadAll();
+    //xlReadXYZ();
+    gyroReadXYZ();
     attEstimatePose();    
     rgltrRunController();
     
