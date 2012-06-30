@@ -45,18 +45,20 @@
 
 // Frame calculation result storage class
 typedef struct {
-    // State info
-    unsigned int frameNum;      // Corresponding frame number
-    unsigned char valid;        // Valid bit
+    // Base info
+    unsigned int frame_num;     // Corresponding frame number    
     unsigned long timestamp;    // Time of processing
-    // Processing results
-    unsigned int offset[2];     // Location of center in camera frame
-    unsigned int centroid[2];   // Centroid location
-    unsigned int max[2];        // Max pixel location
-    // Mass properties
-    unsigned long mass;         // Sum of luminosity over frame
-    unsigned char max_lum;      // Brightest pixel luminosity
+    unsigned int offset[2];     // Location of center in camera frame 
+    // Mass properties    
+    unsigned long mass;         // Total luminosity
     unsigned char avg_lum;      // Average luminosity
+    unsigned char row_means[DS_IMAGE_ROWS]; // Row means
+    unsigned char col_means[DS_IMAGE_COLS]; // Column means        
+    // Centroid finding   
+    unsigned int centroid[2];   // Centroid location   
+    // Max finding
+    unsigned int max[2];        // Max pixel location
+    unsigned char max_lum;      // Brightest pixel luminosity
 } FrameInfoStruct;
 
 typedef FrameInfoStruct* FrameInfo;
@@ -65,6 +67,8 @@ typedef FrameInfoStruct* FrameInfo;
  * Set up the CV module
  */
 void cvSetup(void);
+
+void cvSetHP(void);
 
 /**
  * Set a frame to be subtracted from all processed frames
