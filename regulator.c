@@ -34,9 +34,20 @@
  * v.beta
  *
  * Revisions:
- *  Stanley S. Baek     2009-10-30     Initial release
- *  Humphrey Hu		    2011-7-20      Changed to fixed point
- *  Humphrey Hu         2012-2-20      Returned to floating point, restructured
+ *  Stanley S. Baek     2009-10-30      Initial release
+ *  Humphrey Hu		    2011-07-20       Changed to fixed point
+ *  Humphrey Hu         2012-02-20       Returned to floating point, restructured
+ *  Humphrey Hu         2012-06-30      Switched to using quaternions
+ *
+ * Notes:
+ *  I-Bird body axes are: (check these)
+ *      x - Forward along anteroposterior axis
+ *      y - Left along left-right axis
+ *      z - Up along dorsoventral axis
+ *  Rotations in body axes are:
+ *      yaw - Positive z direction
+ *      pitch - Positive y direction
+ *      roll - Positive x direction
  */
 
 // Software modules
@@ -52,6 +63,7 @@
 #include "led.h"
 
 // Other
+#include "quat.h"
 #include "sys_clock.h"
 #include "bams.h"
 #include "utils.h"
@@ -77,13 +89,16 @@ DigitalFilter yawRateFilter, pitchRateFilter, rollRateFilter;
 static unsigned char is_ready = 0;
 static RegulatorMode reg_mode;
 static RegulatorOutput rc_outputs;
+static Quaternion reference;
 
+// Telemetry buffering
 static RegulatorStateStruct reg_state[REG_BUFF_SIZE];
 static PoolBuffStruct reg_state_buff;
 
 // =========== Function Stubs =================================================
 static float runYawControl(float yaw);
 static float runPitchControl(float pitch);
+static float runRollControl(float roll);
 
 // =========== Public Functions ===============================================
 
@@ -110,6 +125,11 @@ void rgltrSetup(float ts) {
     }
     pbuffInit(&reg_state_buff, REG_BUFF_SIZE, states);
     
+    reference.w = 1.0;
+    reference.x = 0.0;
+    reference.y = 0.0;
+    reference.z = 0.0;
+    
     is_ready = 1;
 }
 
@@ -119,14 +139,17 @@ void rgltrSetMode(unsigned char flag) {
         reg_mode = flag;
         ctrlStop(&yawPid);
         ctrlStop(&pitchPid);
+        ctrlStop(&rollPid);
     } else if(flag == REG_TRACK) {
         reg_mode = flag;
         ctrlStart(&yawPid);
         ctrlStart(&pitchPid);
+        ctrlStart(&rollPid);
     } else if(flag == REG_REMOTE_CONTROL) {
         reg_mode = flag;
         ctrlStop(&yawPid);
         ctrlStop(&pitchPid);
+        ctrlStop(&rollPid);
     }
         
 }
@@ -134,8 +157,7 @@ void rgltrSetMode(unsigned char flag) {
 void rgltrSetYawRateFilter(RateFilterParams params) {
 
     yawRateFilter = dfilterCreate(params->order, params->type,
-                                    params->xcoeffs, params->ycoeffs);
-    
+                                    params->xcoeffs, params->ycoeffs);    
 } 
 
 
@@ -181,15 +203,21 @@ void rgltrSetRollPid(PidParams params) {
 }
 
 void rgltrSetYawRef(float ref) {
+ 
     ctrlSetRef(&yawPid, ref);
+
 }
 
 void rgltrSetPitchRef(float ref) {
+
     ctrlSetRef(&pitchPid, ref);
+
 }
 
 void rgltrSetRollRef(float ref) {
+
     ctrlSetRef(&rollPid, ref);
+
 }
 
 void rgltrSetRemoteControlValues(float thrust, float steer, float elevator) {
@@ -219,20 +247,24 @@ void rgltrGetState(RegulatorState dst) {
 void rgltrRunController(void) {
     
     float steer, thrust, elevator;
-    PoseEstimateStruct pose;    
+    float yaw_err, pitch_err, roll_err, rot_mag;
+    Quaternion pose, error, conj;
     RegulatorState state;
     
-    if(!is_ready) { return; }   // Don't run if not ready    
+    if(!is_ready) { return; }
 
-    steer = 0.0;
-    thrust = 0.0;
-    elevator = 1.0;
+    attgetQuat(&pose);      // Retrieve pose estimate
     
-    pose.yaw = 0.0; // Initialize to make optimizer happy
-    pose.pitch = 0.0;
-    pose.roll = 0.0;
-    attGetPose(&pose);
-
+    // qref = qerr*qpose
+    // qref*qpose' = qerr    
+    quatConj(&pose, &conj);
+    quatMult(&reference, &conj, &error);    
+    
+    rot_mag = bams16ToFloatRad(bams16Acos(error.w)*2);  // w = cos(rot_mag/2)
+    yaw_err = error.z*rot_mag;
+    pitch_err = error.y*rot_mag;
+    roll_err = error.x*rot_mag;
+    
     if(reg_mode == REG_OFF) { 
         
         steer = 0.0;
@@ -247,8 +279,8 @@ void rgltrRunController(void) {
 
     } else if(reg_mode == REG_TRACK){
 
-        steer = runYawControl(pose.yaw);
-        thrust = runPitchControl(pose.pitch);
+        steer = runYawControl(yaw_err);
+        thrust = runPitchControl(pitch_err);
         elevator = rc_outputs.elevator;
         // ? = runRollControl(roll); // No roll actuator yet
 
@@ -260,9 +292,9 @@ void rgltrRunController(void) {
         state->ref[0] = ctrlGetRef(&yawPid);
         state->ref[1] = ctrlGetRef(&pitchPid);
         state->ref[2] = ctrlGetRef(&rollPid);
-        state->x[0] = pose.yaw;
-        state->x[1] = pose.pitch;
-        state->x[2] = pose.roll;
+        state->x[0] = yaw_err; //pose.yaw;
+        state->x[1] = pitch_err; //pose.pitch;
+        state->x[2] = roll_err; //pose.roll;
         state->u[0] = thrust;
         state->u[1] = steer;
         state->u[2] = elevator;
@@ -271,7 +303,7 @@ void rgltrRunController(void) {
     
     
     mcSteer(steer);
-    mcThrust(thrust); // Motor is reversed
+    mcThrust(thrust);
     servoSet(elevator);
     
 }
