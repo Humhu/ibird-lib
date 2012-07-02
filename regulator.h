@@ -117,6 +117,8 @@ void rgltrSetYawRef(float ref);
 void rgltrSetPitchRef(float ref);
 void rgltrSetRollRef(float ref);
 
+void rgltrSetQuatRef(Quaternion *ref);
+
 /**
  * Set remote control output values
  *

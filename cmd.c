@@ -408,11 +408,15 @@ static void cmdSetRegulatorMode(MacPacket packet) {
 static void cmdSetRegulatorRef(MacPacket packet) {
 
     Payload pld = macGetPayload(packet);
-    float* frame = (float*)payGetData(pld);
+    Quaternion *ref = (Quaternion*)payGetData(pld);
+    
+    rgltrSetQuatRef(ref);
+    
+    //float* frame = (float*)payGetData(pld);
 
-    rgltrSetYawRef(frame[0]);
-    rgltrSetPitchRef(frame[1]);
-    rgltrSetRollRef(frame[2]);
+    // rgltrSetYawRef(frame[0]);
+    // rgltrSetPitchRef(frame[1]);
+    // rgltrSetRollRef(frame[2]);
     
 }
 
