@@ -49,12 +49,11 @@ typedef struct {
 typedef TelemetryStructA* TelemetryA;
  
 // State Telemetry Packet (Type B)
-#define TELEMETRY_B_SIZE	(40)
+#define TELEMETRY_B_SIZE	(48)
 typedef struct {
-    unsigned long time;     // (4) Local time
-    //bams16_t pose[3];     // (6) Euler angles in BAMS format (Switch to quaternions?)
-    float ref[3];           // (12) Reference
-    float x[3];             // (12) Position
+    unsigned long time;     // (4) Local time    
+    Quaternion ref;         // (16) Reference
+    Quaternion pose;        // (16) Position
     float u[3];             // (12) Output
 } TelemetryStructB;
 typedef TelemetryStructB* TelemetryB;

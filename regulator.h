@@ -38,6 +38,8 @@
 #ifndef __REGULATOR_H
 #define __REGULATOR_H
 
+#include "quat.h"
+
 typedef enum {
     REG_OFF = 0,
     REG_TRACK,
@@ -46,8 +48,8 @@ typedef enum {
 
 typedef struct {
     unsigned long time; // Timestamp
-    float ref[3];       // References
-    float x[3];         // Position
+    Quaternion ref;       // References
+    Quaternion pose;         // Position
     float u[3];         // Outputs    
 } RegulatorStateStruct;
 

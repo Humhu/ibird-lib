@@ -253,7 +253,7 @@ void rgltrRunController(void) {
     
     if(!is_ready) { return; }
 
-    attgetQuat(&pose);      // Retrieve pose estimate
+    attGetQuat(&pose);      // Retrieve pose estimate
     
     // qref = qerr*qpose
     // qref*qpose' = qerr    
@@ -289,12 +289,8 @@ void rgltrRunController(void) {
     state = pbuffForceGetIdleOldest(&reg_state_buff);
     if(state != NULL) {
         state->time = sclockGetLocalTicks();
-        state->ref[0] = ctrlGetRef(&yawPid);
-        state->ref[1] = ctrlGetRef(&pitchPid);
-        state->ref[2] = ctrlGetRef(&rollPid);
-        state->x[0] = yaw_err; //pose.yaw;
-        state->x[1] = pitch_err; //pose.pitch;
-        state->x[2] = roll_err; //pose.roll;
+        memcpy(&state->ref, &reference, sizeof(Quaternion));
+        memcpy(&state->pose, &pose, sizeof(Quaternion));
         state->u[0] = thrust;
         state->u[1] = steer;
         state->u[2] = elevator;
