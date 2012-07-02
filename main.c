@@ -121,9 +121,7 @@ int main(void) {
  
     unsigned long prev_millis, now, last_packet;
     unsigned char led_state;
-    unsigned int phase;
-    // CamFrame frame;
-    // FrameInfoStruct info;
+    unsigned int phase;    
 
     prev_millis = 0;
     led_state = 0;    
@@ -148,12 +146,6 @@ int main(void) {
             LED_GREEN = 0;            
             led_state = 0;
         }
-
-        // frame = camGetFrame();
-        // if(frame != NULL) {
-            // cvProcessFrame(frame, &info);
-        // }
-        // camReturnFrame(frame);
 
     }
 
@@ -305,7 +297,7 @@ static void attemptClockSync(void) {
  * Interrupt handler for Timer 5
  * Polls sensors, estimates attitude, and runs controller at
  * regular interval. This timer is the lowest priority with
- * the highest execution time.
+ * the highest execution time. (17400 cycles)
  */
 void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
 

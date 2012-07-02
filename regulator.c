@@ -77,7 +77,14 @@ typedef struct {
     float elevator;
 } RegulatorOutput;
 
-#define REG_BUFF_SIZE       (25)
+#define REG_BUFF_SIZE       (5)
+
+#define YAW_SAT_MAX         (1.0)
+#define YAW_SAT_MIN         (-1.0)
+#define PITCH_SAT_MAX       (1.0)
+#define PITCH_SAT_MIN       (0.0)
+#define ROLL_SAT_MAX        (1.0)
+#define ROLL_SAT_MIN        (-1.0)
 
 // =========== Static Variables ================================================
 
@@ -180,7 +187,7 @@ void rgltrSetYawPid(PidParams params) {
     ctrlSetPidParams(&yawPid, params->ref, params->kp, params->ki, params->kd);
     ctrlSetPidOffset(&yawPid, params->offset);
     ctrlSetRefWeigts(&yawPid, params->beta, params->gamma);
-    ctrlSetSaturation(&yawPid, 100, -100);
+    ctrlSetSaturation(&yawPid, YAW_SAT_MAX, YAW_SAT_MIN);
 
 }
 
@@ -189,7 +196,7 @@ void rgltrSetPitchPid(PidParams params) {
     ctrlSetPidParams(&pitchPid, params->ref, params->kp, params->ki, params->kd);
     ctrlSetPidOffset(&pitchPid, params->offset);
     ctrlSetRefWeigts(&pitchPid, params->beta, params->gamma);
-    ctrlSetSaturation(&pitchPid, 100, 0);
+    ctrlSetSaturation(&pitchPid, PITCH_SAT_MAX, PITCH_SAT_MIN);
 
 }
 
@@ -198,7 +205,7 @@ void rgltrSetRollPid(PidParams params) {
     ctrlSetPidParams(&rollPid, params->ref, params->kp, params->ki, params->kd);
     ctrlSetPidOffset(&rollPid, params->offset);
     ctrlSetRefWeigts(&rollPid, params->beta, params->gamma);
-    ctrlSetSaturation(&rollPid, 100, -100);
+    ctrlSetSaturation(&rollPid, ROLL_SAT_MAX, ROLL_SAT_MIN);
 
 }
 
@@ -217,6 +224,13 @@ void rgltrSetPitchRef(float ref) {
 void rgltrSetRollRef(float ref) {
 
     ctrlSetRef(&rollPid, ref);
+
+}
+
+void rgltrSetQuatRef(Quaternion *ref) {
+
+    if(ref == NULL) { return; }
+    memcpy(&reference, ref, sizeof(Quaternion));
 
 }
 
