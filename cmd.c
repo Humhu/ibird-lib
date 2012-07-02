@@ -217,12 +217,12 @@ unsigned int cmdSetup(unsigned int queue_size) {
     cmd_func[CMD_RUN_GYRO_CALIB] = &cmdRunGyroCalib;
     cmd_func[CMD_GET_GYRO_CALIB_PARAM] = &cmdGetGyroCalibParam;
 
-    cmd_func[CMD_SET_HP] = &cmdSetHP;
     
     cmd_func[CMD_ZERO_ESTIMATE] = &cmdZeroEstimate;
     cmd_func[CMD_REQUEST_ATTITUDE] = &cmdRequestAttitude;
     cmd_func[CMD_RESPONSE_ATTITUDE] = &cmdResponseAttitude;
     
+>>>>>>> master
     return 1;
     
 }
