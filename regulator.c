@@ -253,7 +253,7 @@ void rgltrRunController(void) {
     
     if(!is_ready) { return; }
 
-    attgetQuat(&pose);      // Retrieve pose estimate
+    attGetQuat(&pose);      // Retrieve pose estimate
     
     // qref = qerr*qpose
     // qref*qpose' = qerr    

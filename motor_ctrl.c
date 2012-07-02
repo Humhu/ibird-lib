@@ -43,16 +43,12 @@
 #include "ports.h"
 #include "led.h"
 
-#define LEFT_TURN           (_LATE2 = 1; _LATE4 = 0;)
-#define RIGHT_TURN          (_LATE2 = 0; _LATE4 = 1;)
-#define NO_TURN             (_LATE2 = 0; _LATE4 = 0;)
+#define LEFT_TURN           _LATE2 = 1; _LATE4 = 0;
+#define RIGHT_TURN          _LATE2 = 0; _LATE4 = 1;
+#define NO_TURN             _LATE2 = 0; _LATE4 = 0;
 
 #define LEFT_TURN_CHANNEL   (2)
 #define RIGHT_TURN_CHANNEL  (3)
-
-#define LED_LEFT_TURN       (LED_GREEN = 1; LED_RED = 0;)
-#define LED_RIGHT_TURN      (LED_GREEN = 0; LED_RED = 1;)
-#define LED_NO_TURN         (LED_GREEN = 0; LED_RED = 0;)
 
 #define DC_UPPER_LIMIT      (1.0)
 #define DC_LOWER_LIMIT      (0.0)
