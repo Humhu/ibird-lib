@@ -222,7 +222,6 @@ unsigned int cmdSetup(unsigned int queue_size) {
     cmd_func[CMD_REQUEST_ATTITUDE] = &cmdRequestAttitude;
     cmd_func[CMD_RESPONSE_ATTITUDE] = &cmdResponseAttitude;
     
->>>>>>> master
     return 1;
     
 }
