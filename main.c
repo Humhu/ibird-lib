@@ -50,6 +50,7 @@
 
 #include "cmd.h"
 #include "init_default.h"
+#include "ports.h"
 
 // Utils
 #include "counter.h"
@@ -67,6 +68,7 @@
 #include "attitude.h"
 #include "net.h"
 #include "clock_sync.h"
+#include "rate.h"
 
 // Device Drivers
 #include "led.h"
@@ -99,6 +101,8 @@
 #define DIRECTORY_SIZE              (10)
 #define NUM_CAM_FRAMES              (1)         // Camera driver frames
 
+#define TELEM_PERIOD                (1)
+
 // ==== FUNCTION STUBS =========================================
 static void processRadioBuffer(void);
 
@@ -115,6 +119,7 @@ void _T6Interrupt(void);
 // ==== STATIC VARIABLES =======================================
 
 static CamFrameStruct cam_frames[NUM_CAM_FRAMES];
+static unsigned int reg_cnt;
 
 // ==== FUNCTION BODIES ========================================
 int main(void) {
@@ -133,7 +138,7 @@ int main(void) {
     while(1) {
     
         processRadioBuffer();
-        cmdProcessBuffer();
+        cmdProcessBuffer();        
 
         now = sclockGetGlobalMillis();
         phase = now % 2000;
@@ -176,7 +181,6 @@ void setupAll(void) {
 
     sclockSetup(); // System clock
     batSetup(); // Battery monitor
-    spicSetup(); // SPI-DMA controller
     ppoolInit(); // Initialize packet pool
     dirInit(DIRECTORY_SIZE); // Initialize directory
 
@@ -187,9 +191,8 @@ void setupAll(void) {
     // as the accelerometer. Make sure to set up camera module first!
     dfmemSetup(); // Flash memory device
     camSetup(cam_frames, NUM_CAM_FRAMES); // Camera device
-    servoSetup(); // Soft servo control
     
-    xlSetup();
+    xlSetup();    
     xlSetRange(16); // +- 16 g range
     xlSetOutputRate(0, 0x0c); // 800 Hz
     gyroSetup();
@@ -211,7 +214,9 @@ void setupAll(void) {
     LED_ORANGE = 1; // Second stage initialization clear
 
     // Set up high level software modules
+    telemSetup();    
     attSetup(1.0/REG_FCY); // Pose estimation
+    rateSetup(1.0/REG_FCY); // Ramp generator setup
     rgltrSetup(1.0/REG_FCY); // Pose control
     setupTimer5(REG_FCY); // Set up control loop timer
     attSetRunning(1);
@@ -238,12 +243,14 @@ void setupAll(void) {
     LED_GREEN = 0;
     LED_ORANGE = 0;
 
+    DisableIntT6;
     camStart();    // Start camera capture
     EnableIntT5; // Start control loop
+    EnableIntT6;
 
     radioSetWatchdogState(1);
     radioSetWatchdogTime(400);
-
+    
 }
 
 /**
@@ -297,23 +304,29 @@ static void attemptClockSync(void) {
  * Interrupt handler for Timer 5
  * Polls sensors, estimates attitude, and runs controller at
  * regular interval. This timer is the lowest priority with
- * the highest execution time. (17400 cycles)
+ * the highest execution time. (23000 cycles)
  */
 void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
-
-    //xlReadXYZ();
-    gyroReadXYZ();
-    attEstimatePose();    
-    rgltrRunController();
     
+    gyroReadXYZ();
+    attEstimatePose();
+    rateProcess();
+    rgltrRunController();
+
+    if(reg_cnt % TELEM_PERIOD == 0) {
+        telemLog();
+    }
+    reg_cnt++;
+
     _T5IF = 0;
 
 }
 
 void __attribute__((interrupt, no_auto_psv)) _T6Interrupt(void) {
 
-    radioProcess();
-    
+    radioProcess();    
+    telemProcess();        
+
     _T6IF = 0;
 
 }
@@ -335,7 +348,7 @@ static void setupTimer5(unsigned int fs) {
     period = FCY/(8*fs); 
 
     OpenTimer5(con_reg, period);
-    ConfigIntTimer5(T5_INT_PRIOR_3 & T5_INT_OFF);
+    ConfigIntTimer5(T5_INT_PRIOR_4 & T5_INT_OFF);
 
 }
 
