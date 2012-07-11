@@ -59,9 +59,9 @@ typedef struct {
     // Max finding
     unsigned int max[2];        // Max pixel location
     unsigned char max_lum;      // Brightest pixel luminosity
-} FrameInfoStruct;
+} CvResultStruct;
 
-typedef FrameInfoStruct* FrameInfo;
+typedef CvResultStruct* CvResult;
 
 /**
  * Set up the CV module
@@ -82,8 +82,26 @@ CamFrame cvSetBackgroundFrame(CamFrame frame);
  * Process a frame and record properties into an info struct.
  *
  * @param frame - CamFrame to process
- * @param info - Pointer to FrameInfoStruct to populate with frame's properties
+ * @param info - Pointer to CvResultStruct to populate with frame's properties
  */
-void cvProcessFrame(CamFrame frame, FrameInfo info);
+void cvProcessFrame(CamFrame frame, CvResult info);
+
+void cvReadFrameParams(CamFrame frame, CvResult info);
+
+void cvCalculateMeans(CamFrame frame, CvResult info);
+
+void cvBackgroundSubtractFrame(CamFrame frame, CvResult info);
+
+void cvCentroidFrame(CamFrame frame, CvResult info);
+
+void cvMaxPixelFrame(CamFrame frame, CvResult info);
+
+void cvRotateFrame(CamFrame frame, bams16_t theta);
+
+void cvSobel(CamFrame frame, CvResult info);
+
+void cvHighPassPeak(CamFrame frame, CvResult info);
+
+void cvBinary(CamFrame frame, CvResult info);
 
 #endif
