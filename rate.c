@@ -53,7 +53,7 @@ static unsigned char is_ready = 0, is_running = 0;
 static float period;
 
 static RateStruct current_rate;
-static Quaternion displacement_quat;
+static Quaternion displacement_quat, displacement_conj;
 
 // =========== Function Stubs ==================================================
 
@@ -97,6 +97,7 @@ void rateSet(Rate rate) {
         displacement_quat.z = sina_2*rate->yaw_rate;
     }
     quatNormalize(&displacement_quat);
+    quatConj(&displacement_quat, &displacement_conj);
     
 }
 
@@ -116,6 +117,7 @@ void rateProcess(void) {
     
     rgltrGetQuatRef(&current_ref);
     quatMult(&current_ref, &displacement_quat, &current_ref);
+    quatMult(&displacement_conj, &current_ref, &current_ref);
     quatNormalize(&current_ref);
     rgltrSetQuatRef(&current_ref);
 
