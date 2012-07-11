@@ -49,4 +49,8 @@ void servoSetup(void);
 */ 
 void servoSet(float target);
 
+void servoStart(void);
+
+void servoStop(void);
+
 #endif
