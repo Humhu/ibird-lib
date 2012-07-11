@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2011 - 2012, Regents of the University of California
+* Copyright (c) 2012, Regents of the University of California
 * All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -27,30 +27,39 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 *
-* Synchronous Software Servo (RC PWM) Module
+* I-Bird Rate-Based Reference Generator
 *
 * by Humphrey Hu
 *
-* v.alpha
+* v.beta
+*
+* Revisions: 
+*  Humphrey Hu		    2012-07-09       Initial implementation
 *
 */
 
-#ifndef __SERVO_H
-#define __SERVO_H
+#ifndef __RATE_H
+#define __RATE_H
 
-/**
-* Initialize the servo module
-*/
-void servoSetup(void);
+typedef struct {
+    float yaw_rate;
+    float pitch_rate;
+    float roll_rate;
+} RateStruct;
 
-/**
-* Set servo target position
-* @param target - Float from -1.0 to 1.0
-*/ 
-void servoSet(float target);
+typedef RateStruct *Rate;
 
-void servoStart(void);
+// Set up the module
+void rateSetup(float ts);
 
-void servoStop(void);
+// Set rates
+void rateSet(Rate rate);
+
+// Enable operation
+void rateEnable(void);
+void rateDisable(void);
+
+// Run generator
+void rateProcess(void);
 
 #endif

@@ -82,7 +82,7 @@ typedef struct {
 #define YAW_SAT_MAX         (1.0)
 #define YAW_SAT_MIN         (-1.0)
 #define PITCH_SAT_MAX       (1.0)
-#define PITCH_SAT_MIN       (0.0)
+#define PITCH_SAT_MIN       (-1.0)
 #define ROLL_SAT_MAX        (1.0)
 #define ROLL_SAT_MIN        (-1.0)
 
@@ -97,7 +97,6 @@ static unsigned char is_ready = 0;
 static RegulatorMode reg_mode;
 static RegulatorOutput rc_outputs;
 static Quaternion reference;
-
 // Telemetry buffering
 static RegulatorStateStruct reg_state[REG_BUFF_SIZE];
 static PoolBuffStruct reg_state_buff;
@@ -116,7 +115,8 @@ void rgltrSetup(float ts) {
 
     is_ready = 0;
     reg_mode = REG_OFF;
-        
+
+    servoSetup();
     mcSetup();  // Set up motor driver
 
     ctrlInitPidParams(&yawPid, ts);
@@ -147,16 +147,19 @@ void rgltrSetMode(unsigned char flag) {
         ctrlStop(&yawPid);
         ctrlStop(&pitchPid);
         ctrlStop(&rollPid);
+        servoStop();
     } else if(flag == REG_TRACK) {
         reg_mode = flag;
         ctrlStart(&yawPid);
         ctrlStart(&pitchPid);
         ctrlStart(&rollPid);
+        servoStart();
     } else if(flag == REG_REMOTE_CONTROL) {
         reg_mode = flag;
         ctrlStop(&yawPid);
         ctrlStop(&pitchPid);
         ctrlStop(&rollPid);
+        servoStart();
     }
         
 }
@@ -227,10 +230,17 @@ void rgltrSetRollRef(float ref) {
 
 }
 
+void rgltrGetQuatRef(Quaternion *ref) {
+
+    if(ref == NULL) { return; }
+    quatCopy(ref, &reference);
+
+}
+
 void rgltrSetQuatRef(Quaternion *ref) {
 
     if(ref == NULL) { return; }
-    memcpy(&reference, ref, sizeof(Quaternion));
+    quatCopy(&reference, ref);
 
 }
 
@@ -247,7 +257,7 @@ void rgltrGetState(RegulatorState dst) {
     RegulatorState src;
 
     src = pbuffGetOldestActive(&reg_state_buff);
-    if(src == NULL) { 
+    if(src == NULL) { // Return 0's if no unread data
         memset(dst, 0, sizeof(RegulatorStateStruct));
         return; 
     }
@@ -269,10 +279,10 @@ void rgltrRunController(void) {
 
     attGetQuat(&pose);      // Retrieve pose estimate
     
-    // qref = qerr*qpose
-    // qref*qpose' = qerr    
+    // qref = qpose*qerr
+    // qpose'*qref = qerr
     quatConj(&pose, &conj);
-    quatMult(&reference, &conj, &error);    
+    quatMult(&conj, &reference, &error);
     
     rot_mag = bams16ToFloatRad(bams16Acos(error.w)*2);  // w = cos(rot_mag/2)
     yaw_err = error.z*rot_mag;
@@ -294,24 +304,27 @@ void rgltrRunController(void) {
     } else if(reg_mode == REG_TRACK){
 
         steer = runYawControl(yaw_err);
-        thrust = runPitchControl(pitch_err);
-        elevator = rc_outputs.elevator;
+        elevator = runPitchControl(pitch_err);
+        thrust = rc_outputs.thrust;
+        
+        //thrust = runPitchControl(pitch_err);
+        //elevator = rc_outputs.elevator;
         // ? = runRollControl(roll); // No roll actuator yet
 
-    }
+    }    
 
-    state = pbuffForceGetIdleOldest(&reg_state_buff);
+    state = pbuffForceGetIdleOldest(&reg_state_buff);    
     if(state != NULL) {
         state->time = sclockGetLocalTicks();
         memcpy(&state->ref, &reference, sizeof(Quaternion));
         memcpy(&state->pose, &pose, sizeof(Quaternion));
+        memcpy(&state->error, &error, sizeof(Quaternion));
         state->u[0] = thrust;
         state->u[1] = steer;
         state->u[2] = elevator;
         pbuffAddActive(&reg_state_buff, (void*) state);
-    }
-    
-    
+    }        
+
     mcSteer(steer);
     mcThrust(thrust);
     servoSet(elevator);
@@ -350,12 +363,12 @@ static float runPitchControl(float pitch) {
     
 }
 
-//static float runRollControl(float roll) {
-//
-//    if(!ctrlIsRunning(&rollPid)) {
-//        return 0.0;
-//    } else {
-//        return ctrlRunPid(&rollPid, roll, rollRateFilter);
-//    }
-//
-//}
+static float runRollControl(float roll) {
+
+    if(!ctrlIsRunning(&rollPid)) {
+        return 0.0;
+    } else {
+        return ctrlRunPid(&rollPid, roll, rollRateFilter);
+    }
+
+}

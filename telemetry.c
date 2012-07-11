@@ -45,27 +45,135 @@
 #include "net.h"
 #include "mac_packet.h"
 #include "payload.h"
-#include "gyro.h"
-#include "xl.h"
 #include "regulator.h"
 #include "attitude.h"
-#include "behavior.h"
-#include "counter.h"
-#include <string.h>
 #include "cmd_const.h"
+#include "dfmem.h"
+#include "led.h"
+#include "utils.h"
+#include "pbuff.h"
 
-// Function stubs
-void telemPopulateA(TelemetryA); // Not yet implemented
+#include <string.h>
+
+#define DEFAULT_START_PAGE      (0x80)
+#define TELEM_BUFF_SIZE         (5)
+
+typedef enum {
+    TELEM_IDLE = 0,
+    TELEM_LOGGING,
+    TELEM_ERROR,
+} TelemStatus;
+
+// =========== Static Variables ================================================
+static unsigned char is_ready = 0;
+static TelemStatus status = TELEM_IDLE;
+
+static PoolBuffStruct telem_buff;
+static RegulatorStateStruct states[TELEM_BUFF_SIZE];
+
+static DfmemGeometryStruct mem_geo;
+static unsigned int mem_page_pos, mem_byte_pos, mem_buff_index;
+
+// =========== Function Stubs ==================================================
 void telemPopulateB(TelemetryB); 
 void telemPopulateAttitude(TelemetryAttitude);
 
-// Function bodies
-// TODO: Implement!
-void telemSendA(unsigned int addr) {
+// =========== Public Methods ==================================================
+void telemSetup(void) {
+
+    unsigned int i;
+    RegulatorState s[TELEM_BUFF_SIZE];
+
+    dfmemGetGeometryParams(&mem_geo); // Read memory chip sizing
+    mem_page_pos = DEFAULT_START_PAGE;    
+    mem_byte_pos = 0;
+    mem_buff_index = 0;    
+
+    for(i = 0; i < TELEM_BUFF_SIZE; i++) {
+        s[i] = &states[i];
+    }
+
+    pbuffInit(&telem_buff, TELEM_BUFF_SIZE, s);
+    if(telem_buff.valid == 0) { return; }
+
+    is_ready = 1;
 
 }
 
-// TODO: Move mac packet creation from Radio_DMA to Mac_Packet
+void telemStartLogging(void) {
+
+    unsigned int i;
+
+    if(!is_ready) { return; }
+
+    mem_page_pos = DEFAULT_START_PAGE;
+    mem_byte_pos = 0;
+    mem_buff_index = 0;
+
+    dfmemEraseChip();
+//    i = mem_page_pos;
+//    while(i < mem_geo.max_pages/4) {
+//        dfmemEraseSector(i);
+//        i += mem_geo.pages_per_sector;
+//    }
+    
+    while(!dfmemIsReady());
+    status = TELEM_LOGGING;
+    LED_RED = 1;
+
+}
+
+void telemStopLogging(void) {
+    
+    // TODO: Check for error condition
+    status = TELEM_IDLE;
+    LED_RED = 0;
+    
+}
+
+void telemLog(void) {
+
+    RegulatorState data;
+
+    if(!is_ready) { return; }
+    if(status != TELEM_LOGGING) { return; }
+
+    data = pbuffGetIdle(&telem_buff);
+    if(data == NULL) { return; }
+    
+    rgltrGetState(data); // Fetch regulator data
+    pbuffAddActive(&telem_buff, data); // Queue data
+
+}
+
+
+void telemProcess(void) {
+
+    RegulatorState data;    
+
+    if(!is_ready) { return; }
+    if(mem_page_pos >= mem_geo.max_pages) { telemStopLogging(); }
+    if(status != TELEM_LOGGING) { return; }
+    
+    data = pbuffGetOldestActive(&telem_buff);
+    if(data == NULL) { return; }    
+    
+    dfmemWriteBuffer(data, sizeof(RegulatorStateStruct), mem_byte_pos, mem_buff_index);
+    mem_byte_pos += sizeof(RegulatorStateStruct);
+    
+    if(mem_byte_pos + sizeof(RegulatorStateStruct) > mem_geo.bytes_per_page) {
+    
+        dfmemWriteBuffer2MemoryNoErase(mem_page_pos, mem_buff_index);
+        mem_buff_index ^= 0x01;
+        mem_byte_pos = 0;
+        mem_page_pos++;                
+        
+    }
+
+    pbuffReturn(&telem_buff, data);
+
+}
+
 void telemSendB(unsigned int addr) {
 
 	MacPacket packet;
@@ -114,10 +222,6 @@ void telemSendAttitude(unsigned int addr) {
         radioReturnPacket(packet);	// Delete packet if append fails
 	}
 	
-}
-
-void telemPopulateA(TelemetryA telemetry) {
-
 }
 
 void telemPopulateB(TelemetryB telemetry) {	    

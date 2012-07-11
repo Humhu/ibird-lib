@@ -38,20 +38,19 @@
 #ifndef __REGULATOR_H
 #define __REGULATOR_H
 
-#include "quat.h"
-
 typedef enum {
     REG_OFF = 0,
     REG_TRACK,
     REG_REMOTE_CONTROL,
 } RegulatorMode;
 
-typedef struct {
-    unsigned long time; // Timestamp
-    Quaternion ref;       // References
-    Quaternion pose;         // Position
-    float u[3];         // Outputs    
-} RegulatorStateStruct;
+typedef struct {    
+    Quaternion ref;     // References (16)
+    Quaternion pose;    // Position (16)
+    Quaternion error;   // Error (16)
+    float u[3];         // Outputs (12)
+    unsigned long time; // Timestamp (4)
+} RegulatorStateStruct; // Total: 64 bytes
 
 typedef RegulatorStateStruct* RegulatorState;
 
@@ -117,13 +116,17 @@ void rgltrSetYawRef(float ref);
 void rgltrSetPitchRef(float ref);
 void rgltrSetRollRef(float ref);
 
+/**
+ * Get/Set the quaternion reference
+ */
+void rgltrGetQuatRef(Quaternion *ref);
 void rgltrSetQuatRef(Quaternion *ref);
 
 /**
  * Set remote control output values
  *
- * @param thrust - Thrust duty cycle from 0.0 to 100.0
- * @param steer - Steering duty cycle from -100.0 to 100.0
+ * @param thrust - Thrust duty cycle from 0.0 to 1.0
+ * @param steer - Steering duty cycle from -1.0 to 1.0
  * @param elevator - Elevator position from -1.0 to 1.0
  */
 void rgltrSetRemoteControlValues(float thrust, float steer, float elevator);

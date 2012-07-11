@@ -39,6 +39,7 @@
 *
 */
 
+#include "sync_servo.h"
 #include "utils.h"
 #include "timer.h"
 
@@ -72,6 +73,8 @@ void servoSetup(void) {
     setpoint = PULSE_ZERO_LENGTH;
     pulse_length = PULSE_ZERO_LENGTH;
 
+    servoStop();
+
 }
 
 // Set is in +- 1.0, Track is in +- 312
@@ -82,6 +85,18 @@ void servoSet(float set) {
     
     setpoint = (unsigned int)(PULSE_ZERO_LENGTH + (int)(set*PULSE_AMPLITUDE));
 
+}
+
+void servoStart(void) {
+
+    WriteTimer4(0);
+    _T4IE = 1;
+
+}
+
+void servoStop(void) {
+
+    _T4IE = 0;
 }
 
 // =========== Private Functions ===============================================

@@ -66,6 +66,8 @@
 #define CMD_SET_REGULATOR_PID           (0x23)      // Set regulator PID parameters
 #define CMD_SET_REGULATOR_RATE_FILTER   (0x24)      // Set yaw filter coefficients
 #define CMD_SET_RC_VALUES               (0x25)      // Set remote control values in RC mode
+#define CMD_SET_RATE_MODE               (0x26)      // Set slew enable mode
+#define CMD_SET_RATE_SLEW               (0x27)      // Set position slew rate
 
 // for IMU
 #define CMD_RECORD_SENSOR_DUMP          (0x28)      // Begin saving IMU data to flash
