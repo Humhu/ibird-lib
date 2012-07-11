@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2010-2011, Regents of the University of California
+ * Copyright (c) 2010-2012, Regents of the University of California
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -221,8 +221,7 @@ unsigned int cmdSetup(unsigned int queue_size) {
     cmd_func[CMD_ZERO_ESTIMATE] = &cmdZeroEstimate;
     cmd_func[CMD_REQUEST_ATTITUDE] = &cmdRequestAttitude;
     cmd_func[CMD_RESPONSE_ATTITUDE] = &cmdResponseAttitude;
-    
->>>>>>> master
+
     return 1;
     
 }
@@ -560,8 +559,8 @@ static void cmdGetMemContents(MacPacket packet) {
         while (j + tx_data_size <= MEM_PAGESIZE) {            
             data_packet = radioRequestPacket(tx_data_size);
             if(data_packet == NULL) {                
-                continue;
             }
+
             macSetDestAddr(data_packet, 0x1020);
             macSetDestPan(data_packet, 0x1001);
             pld = macGetPayload(data_packet);
@@ -659,7 +658,7 @@ static void cmdRequestRawFrame(MacPacket packet) {
     Payload pld;
     CamFrame frame;
     CamRow *row;
-    FrameInfoStruct info;
+    CvResultStruct info;
 
     srcAddr = macGetSrcAddr(packet);
     srcPan = macGetSrcPan(packet);    

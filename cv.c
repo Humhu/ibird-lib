@@ -50,38 +50,31 @@
 #include <stdlib.h>
 #include <string.h>
 
+// =========== Static Variables ================================================
+
 // State info
-static unsigned char is_ready, is_running, hp_on;
+static unsigned char is_ready, high_pass_on;
 
 static CamFrame background_frame;
 
-// Private functions
-static void cvReadFrameParams(CamFrame frame, FrameInfo info);
-static void cvCalculateMeans(CamFrame frame, FrameInfo info);
-static void cvBackgroundSubtractFrame(CamFrame frame, FrameInfo info);
-static void cvCentroidFrame(CamFrame frame, FrameInfo info);
-static void cvMaxPixelFrame(CamFrame frame, FrameInfo info);
-static void cvRotateFrame(CamFrame frame, bams16_t theta);
-static void cvSobel(CamFrame frame, FrameInfo info);
-static void cvHighPassPeak(CamFrame frame, FrameInfo info);
-static void cvBinary(CamFrame frame, FrameInfo info);
+// =========== Function Stubs ==================================================
 
-// Helpers
-static void cvShiftHoriz(CamFrame frame, int num);
-static void cvShiftVert(CamFrame frame, int num);
-static void colShift(CamFrame frame, unsigned int col, 
+// Shifting and setting helpers
+static void shiftFrameHorizontal(CamFrame frame, int num);
+static void shiftFrameVertical(CamFrame frame, int num);
+static void shiftColumn(CamFrame frame, unsigned int col, 
                     unsigned int row_dst, unsigned int row_src, unsigned int num);
-static void colSet(CamFrame frame, unsigned int col, unsigned int row_dst,
+static void setColumn(CamFrame frame, unsigned int col, unsigned int row_dst,
                     unsigned char val, unsigned int num);
                     
-// Setup the CV module
+// =========== Public Methods ==================================================                    
+                    
 void cvSetup(void) {        
     
-    is_ready = 0;
-    is_running = 0;    
+    is_ready = 0;    
        
     background_frame = NULL;
-    hp_on = 0;
+    high_pass_on = 0;
     
     is_ready = 1;
 
@@ -89,18 +82,18 @@ void cvSetup(void) {
 
 void cvSetHP() {
 
-    hp_on = ~hp_on;
+    high_pass_on = ~high_pass_on;
 
 }
 
-void cvProcessFrame(CamFrame frame, FrameInfo info) {    
+void cvProcessFrame(CamFrame frame, CvResult info) {    
 
     if(!is_ready) { return; } // Module readiness quick fail       
 
     cvReadFrameParams(frame, info);     
     //cvRotateFrame(frame, -attGetYawBAMS());
     
-    if(hp_on) {
+    if(high_pass_on) {
         cvSobel(frame, info);
         //cvBinary(frame, info);
     }
@@ -119,31 +112,15 @@ CamFrame cvSetBackgroundFrame(CamFrame frame) {
     
 }
 
-// =========== Private Functions ===============================================
-/**
- * Read basic frame parameters and write to info struct.
- * @param frame - Input frame
- * @param info - Info struct to populate
- */
-void cvReadFrameParams(CamFrame frame, FrameInfo info) {
+void cvReadFrameParams(CamFrame frame, CvResult info) {
 
     if(frame == NULL || info == NULL) { return; };
-
-    // Reset fields
-    memset(info, 0, sizeof(FrameInfoStruct));
-
-    // Write frame center location
-    info->offset[0] = DS_IMAGE_COLS/2;
-    info->offset[1] = DS_IMAGE_ROWS/2;
     
-    // Copy frame number
+    memset(info, 0, sizeof(CvResultStruct)); // Reset fields
+    
+    info->offset[0] = 0;
+    info->offset[1] = 0;       
     info->frame_num = frame->frame_num;    
-
-//    unsigned int i;
-//    for(i = 0; i < DS_IMAGE_ROWS; i++) {
-//        memset(frame->pixels[i], 0, DS_IMAGE_COLS/2);
-//        memset(frame->pixels[i] + DS_IMAGE_COLS/2, 0xFF, DS_IMAGE_COLS/2);
-//    }
 
 }
 
@@ -153,7 +130,7 @@ void cvReadFrameParams(CamFrame frame, FrameInfo info) {
  * @param frame - Input frame
  * @param info - Info struct to populate
  */
-void cvBackgroundSubtractFrame(CamFrame frame, FrameInfo info) {
+void cvBackgroundSubtractFrame(CamFrame frame, CvResult info) {
 
     unsigned char cap_val, bg_val;
     unsigned int i, j; 
@@ -162,16 +139,15 @@ void cvBackgroundSubtractFrame(CamFrame frame, FrameInfo info) {
     if(background_frame == NULL) { return; }
 
     for(i = 0; i < DS_IMAGE_ROWS; i++) {        
-        for(j = 0; j < DS_IMAGE_COLS; j++) {
-        
+        for(j = 0; j < DS_IMAGE_COLS; j++) {        
             cap_val = frame->pixels[i][j];
             bg_val = background_frame->pixels[i][j];
+            
             if(cap_val > bg_val) {
                 frame->pixels[i][j] = cap_val - bg_val;
             } else {
                 frame->pixels[i][j] = 0;
-            }
-            
+            }            
         }
     }
 
@@ -183,7 +159,7 @@ void cvBackgroundSubtractFrame(CamFrame frame, FrameInfo info) {
  * @param frame - Input frame
  * @param info - Info struct to populate
  */
-void cvMaxPixelFrame(CamFrame frame, FrameInfo info) {
+void cvMaxPixelFrame(CamFrame frame, CvResult info) {
     
     unsigned int i, j, max_val, max_loc[2];
     unsigned char val;    
@@ -209,7 +185,7 @@ void cvMaxPixelFrame(CamFrame frame, FrameInfo info) {
 
 }
 
-void cvCalculateMeans(CamFrame frame, FrameInfo info) {
+void cvCalculateMeans(CamFrame frame, CvResult info) {
 
     unsigned char i, j, val;
     unsigned long row_acc, col_acc[DS_IMAGE_COLS];
@@ -244,7 +220,7 @@ void cvCalculateMeans(CamFrame frame, FrameInfo info) {
  * @param frame - Input frame
  * @param info - Info struct to populate
  */
-void cvCentroidFrame(CamFrame frame, FrameInfo info) {
+void cvCentroidFrame(CamFrame frame, CvResult info) {
     
     unsigned long x_acc, y_acc, temp;
     unsigned int i;
@@ -277,7 +253,7 @@ void cvCentroidFrame(CamFrame frame, FrameInfo info) {
 
 }
 
-static void cvRotateFrame(CamFrame frame, bams16_t theta) {
+void cvRotateFrame(CamFrame frame, bams16_t theta) {
 
     float alpha, beta;
     int horiz_shift, vert_shift;
@@ -290,125 +266,33 @@ static void cvRotateFrame(CamFrame frame, bams16_t theta) {
     // Calculate total horizontal shift of right column
     vert_shift = (int) (beta*(DS_IMAGE_COLS/2));
     
-    cvShiftHoriz(frame, horiz_shift);    
-    cvShiftVert(frame, vert_shift);
-    cvShiftHoriz(frame, horiz_shift);
+    shiftFrameHorizontal(frame, horiz_shift);    
+    shiftFrameVertical(frame, vert_shift);
+    shiftFrameHorizontal(frame, horiz_shift);
 
 }
 
-// Frame is pointer to CamFrame object
-// num is number of pixels top row (row 0) is shifted to the right
-static void cvShiftHoriz(CamFrame frame, int num) {
+typedef int CannyRow[DS_IMAGE_COLS];
 
-    int shift, half_height, i, width, height;    
-    unsigned char *row;
+// Pseudocode
+static void modifiedCanny(CamFrame frame) {
+
+    // Set up
+    // For set of 5 rows:
+    //      Convolve to get x, y gradients
+    //      Run non-maximum suppression on middle row
+    //      Store suppressed gradient magnitudes
+    //      Shift rows
+
+    unsigned int i, j;
+    CannyRow row, x_gradients[3], y_gradients[3];
     
-    height = (int) DS_IMAGE_ROWS; // frame->num_rows;
-    width = (int) DS_IMAGE_COLS; // frame->num_cols;
-    half_height = (int) height/2;
-    
-    for(i = 0; i < height; i++) {
-            
-        row = frame->pixels[i];
-        shift = ((i - half_height)*num)/half_height;
-        
-        if(shift == 0) {
-            // Do nothing
-        } else if(shift > 0) {
-            
-            memmove(row + shift, row, width - shift);
-            memset(row, 0, shift);
-        
-        } else { // shift < 0
-        
-            shift = -shift;
-            memmove(row, row + shift, width - shift);
-            memset(row + width - shift, 0, shift);
+    for(i = 0; i < DS_IMAGE_ROWS; i++) {
+        for(j = 0; j < DS_IMAGE_COLS; j++) {
             
         }
-
-        int j;
-        j = 0;
-
-    }
-
-}
-
-// Num is number of pixels leftmost column (col 0) is shifted down
-static void cvShiftVert(CamFrame frame, int num) {
-
-    int shift, half_width, i, width, height;        
-    
-    height = (int) DS_IMAGE_ROWS; // frame->num_rows;
-    width = (int) DS_IMAGE_COLS; // frame->num_cols;
-    half_width = (int) width/2;
-    
-    for(i = 0; i < width; i++) {
-                    
-        shift = ((i - half_width)*num)/half_width;
-        
-        if(shift == 0) {
-            // Do nothing
-        } else if(shift > 0) {
-            
-            colShift(frame, i, 0, shift, height - shift);
-            colSet(frame, i, height - shift, 0, shift); 
-            
-        } else { // shift < 0
-        
-            shift = -shift;
-            colShift(frame, i, shift, 0, height - shift); 
-            colSet(frame, i, 0, 0, shift);
-            
-        }
-
-        int j;
-        j = 0;
-
-    }
-
-}
-
-static void colShift(CamFrame frame, unsigned int col,
-                    unsigned int row_dst, unsigned int row_src, unsigned int num) {
-
-    int i, shift, step;
-    unsigned int cnt;    
-        
-    shift = row_dst - row_src;
-    
-    if(shift == 0) {
-        return;
-    } else if(shift > 0) { // Start from tail
-        step = -1;
-        i = num - 1;
-    } else { // shift < 0, start from head
-        step = 1;
-        i = 0;
     }
     
-    cnt = num;
-    while(cnt--) {
-        frame->pixels[row_dst + i][col] = 
-            frame->pixels[row_src + i][col];
-        i = i + step;
-    }
-    
-}
-
-static void colSet(CamFrame frame, unsigned int col, unsigned int row_dst,
-                unsigned char val, unsigned int num) {
-
-    unsigned int cnt, i;
-    
-    cnt = num;
-    i = 0;
-    
-    while(cnt--) {
-        frame->pixels[row_dst + i][col] = val;
-        i++;
-    }
-                
 }
 
 const char sobel_hor_kernel[3] = {-1, 0, 1};
@@ -418,7 +302,7 @@ const char sobel_ver_kernel[3] = {1, 2, 1};
 #define SOBEL_IMAGE_COLS       (DS_IMAGE_COLS - 2)
 #define SOBEL_IMAGE_ROWS       (DS_IMAGE_ROWS - 2)
 
-static void cvSobel(CamFrame frame, FrameInfo info) {
+void cvSobel(CamFrame frame, CvResult info) {
 
     unsigned int i, j, k;
     int h_acc, v_acc, h_grad[SOBEL_IMAGE_COLS], v_grad[SOBEL_IMAGE_COLS];
@@ -482,7 +366,7 @@ static void cvSobel(CamFrame frame, FrameInfo info) {
 
 #define BIN_THRESHOLD       (30)
 
-static void cvBinary(CamFrame frame, FrameInfo info) {
+void cvBinary(CamFrame frame, CvResult info) {
 
     unsigned int i, j;
     unsigned char val;    
@@ -498,4 +382,156 @@ static void cvBinary(CamFrame frame, FrameInfo info) {
         }
     }
 
+}
+
+// =========== Private Functions ===============================================
+
+// Frame is pointer to CamFrame object
+// num is number of pixels top row (row 0) is shifted to the right
+static void shiftFrameHorizontal(CamFrame frame, int num) {
+
+    int shift, half_height, i, width, height;    
+    unsigned char *row;
+    
+    height = (int) DS_IMAGE_ROWS; // frame->num_rows;
+    width = (int) DS_IMAGE_COLS; // frame->num_cols;
+    half_height = (int) height/2;
+    
+    for(i = 0; i < height; i++) {
+            
+        row = frame->pixels[i];
+        shift = ((i - half_height)*num)/half_height;
+        
+        if(shift == 0) {
+            // Do nothing
+        } else if(shift > 0) {
+            
+            memmove(row + shift, row, width - shift);
+            memset(row, 0, shift);
+        
+        } else { // shift < 0
+        
+            shift = -shift;
+            memmove(row, row + shift, width - shift);
+            memset(row + width - shift, 0, shift);
+            
+        }
+
+        int j;
+        j = 0;
+
+    }
+
+}
+
+// Num is number of pixels leftmost column (col 0) is shifted down
+static void shiftFrameVertical(CamFrame frame, int num) {
+
+    int shift, half_width, i, width, height;        
+    
+    height = (int) DS_IMAGE_ROWS; // frame->num_rows;
+    width = (int) DS_IMAGE_COLS; // frame->num_cols;
+    half_width = (int) width/2;
+    
+    for(i = 0; i < width; i++) {
+                    
+        shift = ((i - half_width)*num)/half_width;
+        
+        if(shift == 0) {
+            // Do nothing
+        } else if(shift > 0) {
+            
+            shiftColumn(frame, i, 0, shift, height - shift);
+            setColumn(frame, i, height - shift, 0, shift); 
+            
+        } else { // shift < 0
+        
+            shift = -shift;
+            shiftColumn(frame, i, shift, 0, height - shift); 
+            setColumn(frame, i, 0, 0, shift);
+            
+        }
+
+        int j;
+        j = 0;
+
+    }
+
+}
+
+static void shiftColumn(CamFrame frame, unsigned int col,
+                    unsigned int row_dst, unsigned int row_src, unsigned int num) {
+
+    int i, shift, step;
+    unsigned int cnt;    
+        
+    shift = row_dst - row_src;
+    
+    if(shift == 0) {
+        return;
+    } else if(shift > 0) { // Start from tail
+        step = -1;
+        i = num - 1;
+    } else { // shift < 0, start from head
+        step = 1;
+        i = 0;
+    }
+    
+    cnt = num;
+    while(cnt--) {
+        frame->pixels[row_dst + i][col] = 
+            frame->pixels[row_src + i][col];
+        i = i + step;
+    }
+    
+}
+
+static void setColumn(CamFrame frame, unsigned int col, unsigned int start_row,
+                unsigned char val, unsigned int num) {
+
+    unsigned int cnt, i;
+    
+    cnt = num;
+    i = 0;
+    
+    while(cnt--) {
+        frame->pixels[start_row + i][col] = val;
+        i++;
+    }
+                
+}
+
+static void cvNonMaximumElimination(CamFrame frame) {
+
+    unsigned int i, j, atan_result;
+    unsigned char val;
+    
+    // Set outside border to 0
+    memset(frame->pixels[0], 0x00, DS_IMAGE_COLS);
+    memset(frame->pixels[DS_IMAGE_ROWS - 1], 0x00, DS_IMAGE_COLS);
+    setColumn(frame, 0, 0, 0x00, DS_IMAGE_ROWS);
+    setColumn(frame, DS_IMAGE_COLS - 1, 0, 0x00, DS_IMAGE_ROWS);
+    
+    for(i = 1; i < DS_IMAGE_ROWS - 1; i++) {
+        for(j = 1; j < DS_IMAGE_COLS - 1; j++) {
+            val = frame->pixels[i][j];
+            
+        }
+    }
+
+}
+
+typedef enum {
+    LEFT_RIGHT = 0,
+    UP_DOWN,
+} AtanSimpleAngle;    
+
+static AtanSimpleAngle atanSimple(int y, int x) {
+
+    if(y > 0) { y = -y; }
+    if(x > 0) { x = -x; }
+    
+    if(x > y) { return LEFT_RIGHT; }
+    else { return UP_DOWN; }
+    
 }
