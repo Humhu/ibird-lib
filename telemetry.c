@@ -110,12 +110,12 @@ void telemStartLogging(void) {
     mem_byte_pos = 0;
     mem_buff_index = 0;
 
-    dfmemEraseChip();
-//    i = mem_page_pos;
-//    while(i < mem_geo.max_pages/4) {
-//        dfmemEraseSector(i);
-//        i += mem_geo.pages_per_sector;
-//    }
+    //dfmemEraseChip();
+    i = mem_page_pos;
+    while(i < mem_geo.max_pages/4) {
+        dfmemEraseSector(i);
+        i += mem_geo.pages_per_sector;
+    }
     
     while(!dfmemIsReady());
     status = TELEM_LOGGING;

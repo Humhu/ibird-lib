@@ -111,6 +111,8 @@ static void setRandomSeed(void);
 static void attemptNetworkConfig(void);
 static void attemptClockSync(void);
 
+static void batteryLowCallback(void);
+
 static void setupTimer5(unsigned int per);
 static void setupTimer6(unsigned int per);
 void _T5Interrupt(void);
@@ -139,6 +141,7 @@ int main(void) {
     
         processRadioBuffer();
         cmdProcessBuffer();        
+        telemProcess();        
 
         now = sclockGetGlobalMillis();
         phase = now % 2000;
@@ -181,6 +184,7 @@ void setupAll(void) {
 
     sclockSetup(); // System clock
     batSetup(); // Battery monitor
+    batSetCallback(&batteryLowCallback);
     ppoolInit(); // Initialize packet pool
     dirInit(DIRECTORY_SIZE); // Initialize directory
 
@@ -254,8 +258,7 @@ void setupAll(void) {
 }
 
 /**
- * Seeds the system pseudo-random number generator using the accelerometer and
- * gyro
+ * Seeds the system pseudo-random number generator using the IMU sensors
  */
 static void setRandomSeed(void) {
 
@@ -300,11 +303,17 @@ static void attemptClockSync(void) {
 
 }
 
+static void batteryLowCallback(void) {
+
+    rgltrSetMode(REG_OFF);
+
+}
+
 /**
  * Interrupt handler for Timer 5
  * Polls sensors, estimates attitude, and runs controller at
  * regular interval. This timer is the lowest priority with
- * the highest execution time. (23000 cycles)
+ * the highest execution time. (20000 cycles)
  */
 void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
     
@@ -324,9 +333,7 @@ void __attribute__((interrupt, no_auto_psv)) _T5Interrupt(void) {
 
 void __attribute__((interrupt, no_auto_psv)) _T6Interrupt(void) {
 
-    radioProcess();    
-    telemProcess();        
-
+    radioProcess();        
     _T6IF = 0;
 
 }

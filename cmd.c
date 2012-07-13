@@ -42,6 +42,8 @@
  * To do:
  *	
  */
+
+#include <stdio.h>
 #include "cam.h"
 #include "telemetry.h"
 #include "cmd.h"
@@ -66,7 +68,6 @@
 #include "cv.h"
 #include "directory.h"
 #include "carray.h"
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -411,24 +412,21 @@ static void cmdSetRegulatorPid(MacPacket packet) {
 static void cmdSetRegulatorRateFilter(MacPacket packet) {
     
     Payload pld;
-    unsigned char* frame, i, j;
-    RateFilterParamsStruct params[3];
+    unsigned int* frame, i, j;
+    RateFilterParamsStruct params;
 
     pld = macGetPayload(packet);
-    frame = payGetData(pld);
+    frame = payGetData(pld);    
+
     j = 0;
+    params.order = frame[j++];
+    params.type = frame[j++];
+    params.xcoeffs = (float*) (frame + j); // Order + 1 floats per array
+    params.ycoeffs = params.xcoeffs + sizeof(float)*(params.order + 1);    
     
-    for(i = 0; i < 3; i++) {
-        params[i].order = frame[j++];
-        params[i].type = frame[j++];
-        params[i].xcoeffs = (float*) (frame + j); // Order + 1 floats per array
-        params[i].ycoeffs = params[i].xcoeffs + sizeof(float)*(params[i].order + 1);
-        j += 2*sizeof(float)*(params[i].order + 1);
-    }
-    
-    rgltrSetYawRateFilter(&params[0]);
-    rgltrSetPitchRateFilter(&params[1]);
-    rgltrSetRollRateFilter(&params[2]);
+    rgltrSetYawRateFilter(&params);
+    rgltrSetPitchRateFilter(&params);
+    rgltrSetRollRateFilter(&params);
     
 }
   
@@ -459,7 +457,7 @@ static void cmdSetRateSlew(MacPacket packet) {
 
     Payload pld = macGetPayload(packet);
     Rate slew = (Rate)payGetData(pld);
-    rateSet(slew);
+    rateSetGlobalSlew(slew);
 
 }
 

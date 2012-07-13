@@ -52,53 +52,47 @@
 static unsigned char is_ready = 0, is_running = 0;
 static float period;
 
-static RateStruct current_rate;
-static Quaternion displacement_quat, displacement_conj;
+static RateStruct current_global_rate, current_body_rate;
+static Quaternion global_axis_displacement, body_axis_displacement;
 
 // =========== Function Stubs ==================================================
+static void generateDisplacement(Rate rate, Quaternion *q);
 
 // =========== Public Methods ==================================================
 void rateSetup(float ts) {
 
     period = ts;
-    current_rate.yaw_rate = 0.0;
-    current_rate.pitch_rate = 0.0;
-    current_rate.roll_rate = 0.0;   
+    
+    current_global_rate.yaw_rate = 0.0;
+    current_global_rate.pitch_rate = 0.0;
+    current_global_rate.roll_rate = 0.0;   
+    
+    current_body_rate.yaw_rate = 0.0;
+    current_body_rate.pitch_rate = 0.0;
+    current_body_rate.roll_rate = 0.0;
     
     is_running = 0;
     is_ready = 1;
     
 }
 
-void rateSet(Rate rate) {
-
-    float norm, a_2, sina_2;
+void rateSetGlobalSlew(Rate rate) {
 
     if(rate == NULL) { return; }
     
-    memcpy(&current_rate, rate, sizeof(RateStruct));    
+    memcpy(&current_global_rate, rate, sizeof(RateStruct));    
 
-    norm = sqrtf(   rate->yaw_rate*rate->yaw_rate +
-                    rate->pitch_rate*rate->pitch_rate +
-                    rate->roll_rate*rate->roll_rate   );
-
-    if(norm == 0.0) {
-        displacement_quat.w = 1.0;
-        displacement_quat.x = 0.0;
-        displacement_quat.y = 0.0;
-        displacement_quat.z = 0.0;
-    } else {
-        a_2 = floatToBams32Rad(norm*period)/2;
-        sina_2 = bams32SinFine(a_2);
-
-        displacement_quat.w = bams32CosFine(a_2)*norm;
-        displacement_quat.x = sina_2*rate->roll_rate;
-        displacement_quat.y = sina_2*rate->pitch_rate;
-        displacement_quat.z = sina_2*rate->yaw_rate;
-    }
-    quatNormalize(&displacement_quat);
-    quatConj(&displacement_quat, &displacement_conj);
+    generateDisplacement(rate, &global_axis_displacement);
     
+}
+
+void rateSetBodySlew(Rate rate) {
+
+    if(rate == NULL) { return; }
+    
+    memcpy(&current_body_rate, rate, sizeof(RateStruct));
+    generateDisplacement(rate, &body_axis_displacement);
+
 }
 
 void rateEnable(void) {
@@ -115,12 +109,39 @@ void rateProcess(void) {
 
     if(!is_ready || !is_running) { return; }
     
-    rgltrGetQuatRef(&current_ref);
-    quatMult(&current_ref, &displacement_quat, &current_ref);
-    quatMult(&displacement_conj, &current_ref, &current_ref);
+    rgltrGetQuatRef(&current_ref);    
+
+    quatMult(&current_ref, &global_axis_displacement, &current_ref);
     quatNormalize(&current_ref);
+
     rgltrSetQuatRef(&current_ref);
 
 }
 
 // =========== Private Methods =================================================
+
+void generateDisplacement(Rate rate, Quaternion *q) {
+    
+    float norm, a_2, sina_2;
+    
+    norm = sqrtf(   rate->yaw_rate*rate->yaw_rate +
+                    rate->pitch_rate*rate->pitch_rate +
+                    rate->roll_rate*rate->roll_rate   );
+
+    if(norm == 0.0) {
+        q->w = 1.0;
+        q->x = 0.0;
+        q->y = 0.0;
+        q->z = 0.0;
+    } else {
+        a_2 = floatToBams32Rad(norm*period)/2;
+        sina_2 = bams32SinFine(a_2);
+
+        q->w = bams32CosFine(a_2)*norm;
+        q->x = sina_2*rate->roll_rate;
+        q->y = sina_2*rate->pitch_rate;
+        q->z = sina_2*rate->yaw_rate;
+    }
+    quatNormalize(q);    
+    
+}
