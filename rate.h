@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2010 - 2012, Regents of the University of California
+* Copyright (c) 2012, Regents of the University of California
 * All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -27,65 +27,39 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 *
-* PWM Motor Controller Drive
+* I-Bird Rate-Based Reference Generator
 *
-* by Stanley S. Baek
+* by Humphrey Hu
 *
-* v 0.2
+* v.beta
 *
-* Revisions:
-*   Stanley S. Baek     2010-05-30      Initial release
-*   Humphrey Hu         2012-06-30      Switched to +- 1.0 scale
+* Revisions: 
+*  Humphrey Hu		    2012-07-09       Initial implementation
+*
 */
 
-#ifndef __MOTOR_CTRL_H
-#define __MOTOR_CTRL_H
+#ifndef __RATE_H
+#define __RATE_H
 
-#define MC_NUM_CHANNELS     (4)
-#define MC_CHANNEL_PWM1     (1)
-#define MC_CHANNEL_PWM2     (2)
-#define MC_CHANNEL_PWM3     (3)
-#define MC_CHANNEL_PWM4     (4)
+typedef struct {
+    float yaw_rate;
+    float pitch_rate;
+    float roll_rate;
+} RateStruct;
 
-typedef enum {
-    MC_STEER_DISC = 0,
-    MC_STEER_CONT,
-} McSteerMode;
+typedef RateStruct *Rate;
 
-#define MC_STEER_MODE_DISC  (0)   
-#define MC_STEER_MODE_CONT  (1)   
+// Set up the module
+void rateSetup(float ts);
 
-#define MC_STEER_LEFT       (-1.0)
-#define MC_STEER_RIGHT      (1.0)
-#define MC_STEER_STRAIGHT   (0.0)
+// Set rates
+void rateSet(Rate rate);
 
-// by default, all RE ports are output
-void mcSetup(void);
+// Enable operation
+void rateEnable(void);
+void rateDisable(void);
 
-// the resolution of the duty cycle is 1/(2*PTPER)
-void mcSetDutyCycle(unsigned char channel, float duty_cycle);
+// Run generator
+void rateProcess(void);
 
-/**
- * Stop all motor controller axes
- */
-void mcStop(void);
-
-/**
- * Set the duty cycle on PWM1
- * @param value - Duty cycle in [0.0, 1.0]
- */
-void mcThrust(float value);
-
-/**
- * Set the duty cycle and direction on PWM2 and PWM3's H-Bridge
- * @param value - Duty cycle in [-1.0, 1.0]
- */
-void mcSteer(float value);
-
-/**
- * Set the H-Bridge steering mode
- * @param mode - Steering mode flag
- */
-void mcSetSteerMode(McSteerMode mode);
-
-#endif  // __MOTOR_CTRL_H
+#endif

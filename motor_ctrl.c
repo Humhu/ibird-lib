@@ -1,47 +1,100 @@
-/*********************************************
-* Name: motor_ctrl.c
-* Desc: Motor Controller (PWM)
-* Date: 2010-05-30
-* Author: stanbaek
-*********************************************/
+/*
+* Copyright (c) 2010 - 2012, Regents of the University of California
+* All rights reserved.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* - Redistributions of source code must retain the above copyright notice,
+*   this list of conditions and the following disclaimer.
+* - Redistributions in binary form must reproduce the above copyright notice,
+*   this list of conditions and the following disclaimer in the documentation
+*   and/or other materials provided with the distribution.
+* - Neither the name of the University of California, Berkeley nor the names
+*   of its contributors may be used to endorse or promote products derived
+*   from this software without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+* ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+* LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+* CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+* SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+* INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+* CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+* ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+* POSSIBILITY OF SUCH DAMAGE.
+*
+*
+* PWM Motor Controller Drive
+*
+* by Stanley S. Baek
+*
+* v 0.2
+*
+* Revisions:
+*   Stanley S. Baek     2010-05-30      Initial release
+*   Humphrey Hu         2012-06-30      Switched to +- 1.0 scale
+*/
 
 #include "motor_ctrl.h"
 #include "pwm.h"
 #include "ports.h"
 #include "led.h"
 
-//#include "lcd.h"
-//#include <stdio.h>
+#define LEFT_TURN           _LATE2 = 1; _LATE4 = 0;
+#define RIGHT_TURN          _LATE2 = 0; _LATE4 = 1;
+#define NO_TURN             _LATE2 = 0; _LATE4 = 0;
 
+#define LEFT_TURN_CHANNEL   (2)
+#define RIGHT_TURN_CHANNEL  (3)
 
-#define LEFT_TURN           _LATE2 = 1; _LATE4 = 0
-#define RIGHT_TURN          _LATE2 = 0; _LATE4 = 1
-#define NO_TURN             _LATE2 = 0; _LATE4 = 0
+#define DC_UPPER_LIMIT      (1.0)
+#define DC_LOWER_LIMIT      (0.0)
 
-#define LEFT_TURN_CHANNEL   2
-#define RIGHT_TURN_CHANNEL  3
-
-#define LED_LEFT_TURN       LED_GREEN = 1; LED_RED = 0
-#define LED_RIGHT_TURN      LED_GREEN = 0; LED_RED = 1
-#define LED_NO_TURN         LED_GREEN = 0; LED_RED = 0
-
-
+// =========== Static Variables ================================================
+static unsigned char is_ready = 0;
 static unsigned int pwmPeriod;
-static unsigned char steerMode = MC_STEER_MODE_CONT;
+static McSteerMode steerMode = MC_STEER_MODE_CONT;
 
+// =========== Function Stubs ==================================================
 static void mcSetupPeripheral(void);
 
-
+// =========== Public Functions ================================================
 void mcSetup(void) {
-
+    
+    pwmPeriod = 624;    // For 1KHz at MIPS == 40    
     mcSetupPeripheral();
+    is_ready = 1;
+    
+}
+
+void mcStop(void) {
+
+    unsigned int i;
+    
+    mcSetDutyCycle(MC_CHANNEL_PWM1, 0.0);
+    mcSetDutyCycle(MC_CHANNEL_PWM2, 0.0);
+    mcSetDutyCycle(MC_CHANNEL_PWM3, 0.0);
+    mcSetDutyCycle(MC_CHANNEL_PWM4, 0.0);
 
 }
 
 void mcSetDutyCycle(unsigned char channel, float duty_cycle) {
 
     unsigned int pdc_value;
-    pdc_value = (unsigned int)(2*duty_cycle/100*pwmPeriod);
+
+    if(!is_ready) { return; }
+
+    // Check input range
+    if(duty_cycle > DC_UPPER_LIMIT) {
+        duty_cycle = DC_UPPER_LIMIT;
+    } else if(duty_cycle < DC_LOWER_LIMIT) {
+        duty_cycle = DC_LOWER_LIMIT;
+    }
+    
+    pdc_value = (unsigned int)(2*duty_cycle*pwmPeriod);
     SetDCMCPWM(channel, pdc_value, 0);
 
 }
@@ -53,8 +106,6 @@ void mcThrust(float value) {
 }
 
 void mcSteer(float value) {
-
-    //char lcdstr[80];
 
     if (steerMode == MC_STEER_MODE_CONT) {
         if (value > 0) {
@@ -83,15 +134,15 @@ void mcSteer(float value) {
 }
 
 
-void mcSetSteerMode(unsigned char mode) {
+void mcSetSteerMode(McSteerMode mode) {
 
-    if (mode == MC_STEER_MODE_DISC) {
-        steerMode = MC_STEER_MODE_DISC;
+    if (mode == MC_STEER_DISC) {
+        steerMode = MC_STEER_DISC;
         // PWM2L & PWM3L pins are general I/O
         PWMCON1bits.PEN2L = 0;
         PWMCON1bits.PEN3L = 0;
     } else {
-        steerMode = MC_STEER_MODE_CONT;
+        steerMode = MC_STEER_CONT;
         // PWM2L & PWM3L pins are enabled for PWM output
         PWMCON1bits.PEN2L = 1;
         PWMCON1bits.PEN3L = 1;
@@ -99,10 +150,7 @@ void mcSetSteerMode(unsigned char mode) {
 
 }
 
-static void mcSetupPeripheral(void) {
-
-    // For 1KHz at MIPS == 40
-    pwmPeriod = 624; 
+static void mcSetupPeripheral(void) {    
     
     ConfigIntMCPWM(PWM_INT_DIS & PWM_FLTA_DIS_INT & PWM_FLTB_DIS_INT);
     
@@ -140,6 +188,3 @@ static void mcSetupPeripheral(void) {
     PTCONbits.PTEN = 1;
 
 }
-
-
-

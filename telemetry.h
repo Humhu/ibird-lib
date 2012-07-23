@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Regents of the University of California
+ * Copyright (c) 2011-2012, Regents of the University of California
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,49 +32,53 @@
  * by Humphrey Hu
  *
  * v. beta
- *
- * Revisions:
- *  Humphrey Hu      2011-08-10    Initial implementation
- *                      
- * 
  */
- #ifndef _telemetry_h_
- #define _telemetry_h_
+ #ifndef __TELEMETRY_H
+ #define __TELEMETRY_H
 
 #include "bams.h"
+#include "quat.h"
 
-// Standard Telemetry Packet (Type A)
-// 30 octets total
-#define TELEMETRY_A_SIZE	(30)
-
+// Sensor Telemetry Packet (Type A)
+#define TELEMETRY_A_SIZE	(6)
 typedef struct {
-	// Standard telemetry packet fields (30 octets)
-	unsigned int time;
-	unsigned int xlData[3]; // X Y and Z
-	unsigned int gyroData[3]; // X Y and Z
-	unsigned int backEMF[2]; // Channel 1 and 2
-	float motorPWM[2]; // Channel 1 and 2
-	unsigned int battVoltage[2]; // Loaded and unloaded
+    unsigned long time;     // (4) Local time
+    int gyro[3];            // (6) Raw gyro values
+    int xl[3];              // (6) Raw xl values
 } TelemetryStructA;
-
 typedef TelemetryStructA* TelemetryA;
  
-// Lightweight Telemetry Format (Type B)
-// 34 octets total
-#define TELEMETRY_B_SIZE	(10)
-
+// State Telemetry Packet (Type B)
+#define TELEMETRY_B_SIZE	(64)
 typedef struct {
-	unsigned long time; // System clock timestamp (4)	
-	bams16_t pose[3]; // Euler angles in binary angles (6)	
+    unsigned long time;     // (4) Local time    
+    Quaternion ref;         // (16) Reference
+    Quaternion pose;        // (16) Position
+    Quaternion error;       // (16) Error
+    float u[3];             // (12) Output
 } TelemetryStructB;
-
 typedef TelemetryStructB* TelemetryB;
 
-// Send a type A telemetry packet
-void telemSendA(unsigned int addr);
+#define TELEMETRY_ATT_SIZE  (16)
+typedef struct {
+    Quaternion att;
+} TelemetryStructAttitude;
+typedef TelemetryStructAttitude* TelemetryAttitude;
+
+void telemSetup(void);
+void telemStartLogging(void);
+void telemStopLogging(void);
+
+// Writes into the buffer
+void telemLog(void);
+// Process the buffer
+void telemProcess(void);
 
 // Send a type B telemetry packet
 void telemSendB(unsigned int addr);
+
+// Send an attitude report packet
+void telemSendAttitude(unsigned int addr);
 
 #endif
 

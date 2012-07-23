@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2009 - 2010, Regents of the University of California
+ * Copyright (c) 2009 - 2012, Regents of the University of California
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,17 @@ typedef enum {
     REG_OFF = 0,
     REG_TRACK,
     REG_REMOTE_CONTROL,
-} RegulatorState;
+} RegulatorMode;
+
+typedef struct {    
+    Quaternion ref;     // References (16)
+    Quaternion pose;    // Position (16)
+    Quaternion error;   // Error (16)
+    float u[3];         // Outputs (12)
+    unsigned long time; // Timestamp (4)
+} RegulatorStateStruct; // Total: 64 bytes
+
+typedef RegulatorStateStruct* RegulatorState;
 
 typedef struct {
     unsigned char order;
@@ -73,46 +83,53 @@ typedef PidParamsStruct *PidParams;
 void rgltrSetup(float ts);
 
 /**
- * Set regulator state
+ * Set regulator mode
  *
  * @param flag - State to transition to
  */
-void rgltrSetState(unsigned char flag);
+void rgltrSetMode(unsigned char flag);
 
 /**
  * Set yaw filter parameters
  *
- * @param params - Yaw filter parameter struct
+ * @param params - Yaw/pitch/roll filter parameter struct
  */
 void rgltrSetYawRateFilter(RateFilterParams params);
 void rgltrSetPitchRateFilter(RateFilterParams params);
 void rgltrSetRollRateFilter(RateFilterParams params);
 
 /**
- * Set yaw PID parameters
+ * Set yaw/pitch/roll PID parameters
  *
- * @param params - Yaw PID parameter struct
+ * @param params - Yaw/pitch/roll PID parameter struct
  */
 void rgltrSetYawPid(PidParams params);
 void rgltrSetPitchPid(PidParams params);
 void rgltrSetRollPid(PidParams params);
 
 /**
- * Set yaw reference value
+ * Set yaw/pitch/roll reference value
  *
- * @param ref - Yaw reference in radians
+ * @param ref - Yaw/pitch/roll reference in radians
  */
 void rgltrSetYawRef(float ref);
 void rgltrSetPitchRef(float ref);
 void rgltrSetRollRef(float ref);
 
 /**
+ * Get/Set the quaternion reference
+ */
+void rgltrGetQuatRef(Quaternion *ref);
+void rgltrSetQuatRef(Quaternion *ref);
+
+/**
  * Set remote control output values
  *
- * @param thrust - Thrust duty cycle from 0.0 to 100.0
- * @param steer - Steering duty cycle from -100.0 to 100.0
+ * @param thrust - Thrust duty cycle from 0.0 to 1.0
+ * @param steer - Steering duty cycle from -1.0 to 1.0
+ * @param elevator - Elevator position from -1.0 to 1.0
  */
-void rgltrSetRemoteControlValues(float thrust, float steer);
+void rgltrSetRemoteControlValues(float thrust, float steer, float elevator);
 
 /**
  * Execute control loop iteration. This method should be called regularly every
@@ -120,6 +137,8 @@ void rgltrSetRemoteControlValues(float thrust, float steer);
  * @see rgltrSetup
  */
 void rgltrRunController(void);
+
+void rgltrGetState(RegulatorState state);
 
 #endif  // __REGULATOR_H
 
