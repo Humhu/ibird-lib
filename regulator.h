@@ -38,6 +38,8 @@
 #ifndef __REGULATOR_H
 #define __REGULATOR_H
 
+#include "quat.h"
+
 typedef enum {
     REG_OFF = 0,
     REG_TRACK,
@@ -77,21 +79,18 @@ typedef PidParamsStruct *PidParams;
 
 /**
  * Set up regulator module
- *
  * @param ts - Execution period
  */
 void rgltrSetup(float ts);
 
 /**
  * Set regulator mode
- *
  * @param flag - State to transition to
  */
 void rgltrSetMode(unsigned char flag);
 
 /**
  * Set yaw filter parameters
- *
  * @param params - Yaw/pitch/roll filter parameter struct
  */
 void rgltrSetYawRateFilter(RateFilterParams params);
@@ -100,7 +99,6 @@ void rgltrSetRollRateFilter(RateFilterParams params);
 
 /**
  * Set yaw/pitch/roll PID parameters
- *
  * @param params - Yaw/pitch/roll PID parameter struct
  */
 void rgltrSetYawPid(PidParams params);
@@ -109,7 +107,6 @@ void rgltrSetRollPid(PidParams params);
 
 /**
  * Set yaw/pitch/roll reference value
- *
  * @param ref - Yaw/pitch/roll reference in radians
  */
 void rgltrSetYawRef(float ref);
@@ -124,7 +121,6 @@ void rgltrSetQuatRef(Quaternion *ref);
 
 /**
  * Set remote control output values
- *
  * @param thrust - Thrust duty cycle from 0.0 to 1.0
  * @param steer - Steering duty cycle from -1.0 to 1.0
  * @param elevator - Elevator position from -1.0 to 1.0
@@ -138,6 +134,11 @@ void rgltrSetRemoteControlValues(float thrust, float steer, float elevator);
  */
 void rgltrRunController(void);
 
+/**
+ * Retrieve a logged regulator trace point
+ * @param state - Pointer to structure to populate
+ * @note 7000 cycles
+ */
 void rgltrGetState(RegulatorState state);
 
 #endif  // __REGULATOR_H

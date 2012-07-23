@@ -53,7 +53,8 @@ typedef RateStruct *Rate;
 void rateSetup(float ts);
 
 // Set rates
-void rateSet(Rate rate);
+void rateSetGlobalSlew(Rate rate);
+void rateSetBodySlew(Rate rate);
 
 // Enable operation
 void rateEnable(void);
