@@ -68,6 +68,7 @@
 #include "cv.h"
 #include "directory.h"
 #include "carray.h"
+#include "slew.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -137,6 +138,9 @@ static void cmdZeroEstimate(MacPacket packet);
 static void cmdRequestAttitude(MacPacket packet);
 static void cmdResponseAttitude(MacPacket packet);
 
+static void cmdSetTelemSubsample(MacPacket packet);
+static void cmdSetSlewLimit(MacPacket packet);
+
 static void cmdEcho(MacPacket packet);
 static void cmdNop(MacPacket packet);
 
@@ -202,14 +206,11 @@ unsigned int cmdSetup(unsigned int queue_size) {
     cmd_func[CMD_REQUEST_ATTITUDE] = &cmdRequestAttitude;
     cmd_func[CMD_RESPONSE_ATTITUDE] = &cmdResponseAttitude;
     
+    cmd_func[CMD_SET_TELEM_SUBSAMPLE] = &cmdSetTelemSubsample;
+    cmd_func[CMD_SET_SLEW_LIMIT] = &cmdSetSlewLimit;
+    
     return 1;
     
-}
-
-void cmdSetHP(MacPacket packet) {
-
-    cvSetHP();
-
 }
 
 unsigned int cmdQueuePacket(MacPacket packet) {
@@ -413,17 +414,16 @@ static void cmdSetRegulatorPid(MacPacket packet) {
 static void cmdSetRegulatorRateFilter(MacPacket packet) {
     
     Payload pld;
-    unsigned int* frame, i, j;
+    unsigned int *frame;
     RateFilterParamsStruct params;
 
     pld = macGetPayload(packet);
-    frame = payGetData(pld);    
+    frame = (unsigned int*) payGetData(pld);
 
-    j = 0;
-    params.order = frame[j++];
-    params.type = frame[j++];
-    params.xcoeffs = (float*) (frame + j); // Order + 1 floats per array
-    params.ycoeffs = params.xcoeffs + sizeof(float)*(params.order + 1);    
+    params.order = frame[0];
+    params.type = frame[1];
+    params.xcoeffs = frame + 2; // Order + 1 floats per array;
+    params.ycoeffs = params.xcoeffs + (params.order + 1); // Typed pointer magic
     
     rgltrSetYawRateFilter(&params);
     rgltrSetPitchRateFilter(&params);
@@ -533,9 +533,9 @@ static void cmdRunGyroCalib(MacPacket packet) {
     
     unsigned int count = frame[0];
 
-    radioSetWatchdogState(0);
-    gyroRunCalib(count);    
-    radioSetWatchdogState(1);
+    radioDisableWatchdog();
+    gyroRunCalib(count);
+    radioEnableWatchdog();
 
 }
 
@@ -760,6 +760,30 @@ static void cmdResponseAttitude(MacPacket packet) {
     // Write me!
     return;
 
+}
+
+void cmdSetHP(MacPacket packet) {
+
+    cvSetHP();
+
+}
+
+void cmdSetTelemSubsample(MacPacket packet) {
+    
+    unsigned int *data;
+    
+    data = (unsigned int*) payGetData(macGetPayload(packet));
+    telemSetSubsampleRate(*data);
+    
+}
+
+void cmdSetSlewLimit(MacPacket packet) {
+
+    float *data;
+
+    data = (float *) payGetData(macGetPayload(packet));
+    slewSetLimit(*data);
+    
 }
 
 /*-----------------------------------------------------------------------------

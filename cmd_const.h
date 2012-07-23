@@ -59,6 +59,7 @@
 #define CMD_GET_VERSION                 (0x0A)      // Reserved - Do not use!
 #define COMMAND_READ_GOTO               (0x10)      // Reserved - Do not use!
 
+#define CMD_PING                        (0x1E)      // Do nothing
 #define CMD_ECHO                        (0x1F)      // send back the received packet
 
 #define CMD_SET_REGULATOR_MODE          (0x21)      // Set the regulator mode
@@ -103,9 +104,12 @@
 #define CMD_SET_HP                      (0x4A)      // Set CV high pass on/off
 
 #define CMD_ZERO_ESTIMATE               (0x4C)      // Zero attitude estimate
-
 #define CMD_REQUEST_ATTITUDE            (0x50)      // Request attitude
 #define CMD_RESPONSE_ATTITUDE           (0x51)      // Response to request for attitude
+
+#define CMD_SET_TELEM_SUBSAMPLE         (0x52)      // Telemetry subsampling divider
+#define CMD_SET_SLEW_LIMIT              (0x53)      // Reference slew limiting
+
 // CMD values of 0x80(128) - 0xEF(239) are reserved.
 // CMD values of 0xF0(240) - 0xFF(255) are reserved for future use
 
