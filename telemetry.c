@@ -57,6 +57,7 @@
 
 #define DEFAULT_START_PAGE      (0x80)
 #define TELEM_BUFF_SIZE         (5)
+#define DEFAULT_SUBSAMPLE       (1)
 
 typedef enum {
     TELEM_IDLE = 0,
@@ -67,9 +68,10 @@ typedef enum {
 // =========== Static Variables ================================================
 static unsigned char is_ready = 0;
 static TelemStatus status = TELEM_IDLE;
+static unsigned int iter_num, subsample_period;
 
 static PoolBuffStruct telem_buff;
-static RegulatorStateStruct states[TELEM_BUFF_SIZE];
+static TelemetryDatapoint datapoints[TELEM_BUFF_SIZE];
 
 static DfmemGeometryStruct mem_geo;
 static unsigned int mem_page_pos, mem_byte_pos, mem_buff_index;
@@ -82,7 +84,7 @@ void telemPopulateAttitude(TelemetryAttitude);
 void telemSetup(void) {
 
     unsigned int i;
-    RegulatorState s[TELEM_BUFF_SIZE];
+    TelemetryDatapoint *s[TELEM_BUFF_SIZE];
 
     dfmemGetGeometryParams(&mem_geo); // Read memory chip sizing
     mem_page_pos = DEFAULT_START_PAGE;    
@@ -90,19 +92,24 @@ void telemSetup(void) {
     mem_buff_index = 0;    
 
     for(i = 0; i < TELEM_BUFF_SIZE; i++) {
-        s[i] = &states[i];
+        s[i] = &datapoints[i];
     }
 
-    pbuffInit(&telem_buff, TELEM_BUFF_SIZE, s);
+    pbuffInit(&telem_buff, TELEM_BUFF_SIZE, (void**)s);
     if(telem_buff.valid == 0) { return; }
 
+    iter_num = 0;
+    subsample_period = DEFAULT_SUBSAMPLE;
+    
     is_ready = 1;
 
 }
 
-void telemStartLogging(void) {
+void telemSetSubsampleRate(unsigned int rate) {
+    subsample_period = rate;
+}
 
-    unsigned int i;
+void telemStartLogging(void) {
 
     if(!is_ready) { return; }
 
@@ -110,12 +117,13 @@ void telemStartLogging(void) {
     mem_byte_pos = 0;
     mem_buff_index = 0;
 
-    //dfmemEraseChip();
-    i = mem_page_pos;
-    while(i < mem_geo.max_pages/4) {
-        dfmemEraseSector(i);
-        i += mem_geo.pages_per_sector;
-    }
+    dfmemEraseChip();
+//    unsigned int i;
+//    i = mem_page_pos;
+//    while(i < mem_geo.max_pages/4) {
+//        dfmemEraseSector(i);
+//        i += mem_geo.pages_per_sector;
+//    }
     
     while(!dfmemIsReady());
     status = TELEM_LOGGING;
@@ -133,15 +141,22 @@ void telemStopLogging(void) {
 
 void telemLog(void) {
 
-    RegulatorState data;
-
+    TelemetryDatapoint *data;
+    RadioStatus radio_stat;
+    
     if(!is_ready) { return; }
     if(status != TELEM_LOGGING) { return; }
-
+    
+    iter_num++;    
+    if(iter_num % subsample_period != 0) { return; }
+    
     data = pbuffGetIdle(&telem_buff);
     if(data == NULL) { return; }
     
-    rgltrGetState(data); // Fetch regulator data
+    rgltrGetState(&data->reg_state); // Fetch regulator data
+    radioGetStatus(&radio_stat);
+    data->ED = radio_stat.last_ed;
+    data->RSSI = radio_stat.last_rssi;
     pbuffAddActive(&telem_buff, data); // Queue data
 
 }
@@ -149,7 +164,7 @@ void telemLog(void) {
 
 void telemProcess(void) {
 
-    RegulatorState data;    
+    TelemetryDatapoint *data;
 
     if(!is_ready) { return; }
     if(mem_page_pos >= mem_geo.max_pages) { telemStopLogging(); }
@@ -158,10 +173,10 @@ void telemProcess(void) {
     data = pbuffGetOldestActive(&telem_buff);
     if(data == NULL) { return; }    
     
-    dfmemWriteBuffer(data, sizeof(RegulatorStateStruct), mem_byte_pos, mem_buff_index);
-    mem_byte_pos += sizeof(RegulatorStateStruct);
+    dfmemWriteBuffer((unsigned char*)data, sizeof(TelemetryDatapoint), mem_byte_pos, mem_buff_index);
+    mem_byte_pos += sizeof(TelemetryDatapoint);
     
-    if(mem_byte_pos + sizeof(RegulatorStateStruct) > mem_geo.bytes_per_page) {
+    if(mem_byte_pos + sizeof(TelemetryDatapoint) > mem_geo.bytes_per_page) {
     
         dfmemWriteBuffer2MemoryNoErase(mem_page_pos, mem_buff_index);
         mem_buff_index ^= 0x01;

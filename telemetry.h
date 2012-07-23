@@ -38,15 +38,13 @@
 
 #include "bams.h"
 #include "quat.h"
+#include "regulator.h"
 
-// Sensor Telemetry Packet (Type A)
-#define TELEMETRY_A_SIZE	(6)
 typedef struct {
-    unsigned long time;     // (4) Local time
-    int gyro[3];            // (6) Raw gyro values
-    int xl[3];              // (6) Raw xl values
-} TelemetryStructA;
-typedef TelemetryStructA* TelemetryA;
+    RegulatorStateStruct reg_state;
+    unsigned char ED;
+    unsigned char RSSI;
+} TelemetryDatapoint;
  
 // State Telemetry Packet (Type B)
 #define TELEMETRY_B_SIZE	(64)
@@ -66,6 +64,7 @@ typedef struct {
 typedef TelemetryStructAttitude* TelemetryAttitude;
 
 void telemSetup(void);
+void telemSetSubsampleRate(unsigned int rate);
 void telemStartLogging(void);
 void telemStopLogging(void);
 
