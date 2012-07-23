@@ -27,15 +27,14 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 *
-* I-Bird Rate-Based Reference Generator
+* Rate-Based Reference Generator
 *
 * by Humphrey Hu
 *
-* v.beta
+* v.0.1
 *
 * Revisions: 
 *  Humphrey Hu		    2012-07-09       Initial implementation
-*
 */
 
 #include "rate.h"
@@ -52,8 +51,8 @@
 static unsigned char is_ready = 0, is_running = 0;
 static float period;
 
-static RateStruct current_global_rate, current_body_rate;
-static Quaternion global_axis_displacement, body_axis_displacement;
+static RateStruct global_rate, body_rate;
+static Quaternion global_displacement, body_displacement;
 
 // =========== Function Stubs ==================================================
 static void generateDisplacement(Rate rate, Quaternion *q);
@@ -63,13 +62,15 @@ void rateSetup(float ts) {
 
     period = ts;
     
-    current_global_rate.yaw_rate = 0.0;
-    current_global_rate.pitch_rate = 0.0;
-    current_global_rate.roll_rate = 0.0;   
+    global_rate.yaw_rate = 0.0;
+    global_rate.pitch_rate = 0.0;
+    global_rate.roll_rate = 0.0;   
+    generateDisplacement(&global_rate, &global_displacement);
     
-    current_body_rate.yaw_rate = 0.0;
-    current_body_rate.pitch_rate = 0.0;
-    current_body_rate.roll_rate = 0.0;
+    body_rate.yaw_rate = 0.0;
+    body_rate.pitch_rate = 0.0;
+    body_rate.roll_rate = 0.0;
+    generateDisplacement(&body_rate, &body_displacement);
     
     is_running = 0;
     is_ready = 1;
@@ -80,9 +81,8 @@ void rateSetGlobalSlew(Rate rate) {
 
     if(rate == NULL) { return; }
     
-    memcpy(&current_global_rate, rate, sizeof(RateStruct));    
-
-    generateDisplacement(rate, &global_axis_displacement);
+    memcpy(&global_rate, rate, sizeof(RateStruct));    
+    generateDisplacement(&global_rate, &global_displacement);
     
 }
 
@@ -90,8 +90,8 @@ void rateSetBodySlew(Rate rate) {
 
     if(rate == NULL) { return; }
     
-    memcpy(&current_body_rate, rate, sizeof(RateStruct));
-    generateDisplacement(rate, &body_axis_displacement);
+    memcpy(&body_rate, rate, sizeof(RateStruct));
+    generateDisplacement(&body_rate, &body_displacement);
 
 }
 
@@ -111,7 +111,10 @@ void rateProcess(void) {
     
     rgltrGetQuatRef(&current_ref);    
 
-    quatMult(&current_ref, &global_axis_displacement, &current_ref);
+    // q_body*q_current*q_global    
+    quatMult(&global_displacement, &current_ref, &current_ref);
+    quatMult(&current_ref, &body_displacement, &current_ref);
+
     quatNormalize(&current_ref);
 
     rgltrSetQuatRef(&current_ref);
@@ -122,7 +125,8 @@ void rateProcess(void) {
 
 void generateDisplacement(Rate rate, Quaternion *q) {
     
-    float norm, a_2, sina_2;
+    float norm, sina_2;
+    bams32_t a_2;
     
     norm = sqrtf(   rate->yaw_rate*rate->yaw_rate +
                     rate->pitch_rate*rate->pitch_rate +

@@ -27,11 +27,11 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 *
-* I-Bird Rate-Based Reference Generator
+* Rate-Based Reference Generator
 *
 * by Humphrey Hu
 *
-* v.beta
+* v.0.1
 *
 * Revisions: 
 *  Humphrey Hu		    2012-07-09       Initial implementation
@@ -49,18 +49,28 @@ typedef struct {
 
 typedef RateStruct *Rate;
 
-// Set up the module
+/**
+ * Initialize the module for use
+ * @param ts - Operation frequency
+ */
 void rateSetup(float ts);
 
-// Set rates
+/**
+ * Set reference slew rates
+ * @param rate - Pointer to argument RateStruct
+ */
 void rateSetGlobalSlew(Rate rate);
 void rateSetBodySlew(Rate rate);
 
-// Enable operation
+/**
+ * Start/stop reference slewing
+ */
 void rateEnable(void);
 void rateDisable(void);
 
-// Run generator
+/**
+ * Generate next reference. Should be called at fixed frequency.
+ */
 void rateProcess(void);
 
 #endif
