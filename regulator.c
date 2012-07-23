@@ -31,16 +31,16 @@
  *
  * by Stanley S. Baek
  *
- * v.beta
+ * v.0.4
  *
  * Revisions:
  *  Stanley S. Baek     2009-10-30      Initial release
- *  Humphrey Hu		    2011-07-20       Changed to fixed point
- *  Humphrey Hu         2012-02-20       Returned to floating point, restructured
- *  Humphrey Hu         2012-06-30      Switched to using quaternions
+ *  Humphrey Hu		    2011-07-20      Changed to fixed point
+ *  Humphrey Hu         2012-02-20      Returned to floating point, restructured
+ *  Humphrey Hu         2012-06-30      Switched to using quaternion representation
  *
  * Notes:
- *  I-Bird body axes are: (check these)
+ *  I-Bird body axes are:
  *      x - Forward along anteroposterior axis
  *      y - Left along left-right axis
  *      z - Up along dorsoventral axis
@@ -48,6 +48,8 @@
  *      yaw - Positive z direction
  *      pitch - Positive y direction
  *      roll - Positive x direction
+ *  PID loops should have references set to 0, since they take the externally
+ *      calculated error as an input.
  */
 
 // Software modules
@@ -55,19 +57,19 @@
 #include "controller.h"
 #include "dfilter.h"
 #include "attitude.h"
-#include "cv.h"
+#include "rate.h"
+#include "slew.h"
 
 // Hardware/actuator interface
 #include "motor_ctrl.h"
 #include "sync_servo.h"
-#include "led.h"
 
 // Other
 #include "quat.h"
 #include "sys_clock.h"
 #include "bams.h"
 #include "utils.h"
-#include "pbuff.h"
+#include "ppbuff.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -77,120 +79,142 @@ typedef struct {
     float elevator;
 } RegulatorOutput;
 
-#define REG_BUFF_SIZE       (5)
+typedef struct {
+    float yaw_err;
+    float pitch_err;
+    float roll_err;
+} RegulatorError;
 
 #define YAW_SAT_MAX         (1.0)
 #define YAW_SAT_MIN         (-1.0)
 #define PITCH_SAT_MAX       (1.0)
 #define PITCH_SAT_MIN       (-1.0)
 #define ROLL_SAT_MAX        (1.0)
-#define ROLL_SAT_MIN        (-1.0)
+#define ROLL_SAT_MIN        (0.0) // Doubling as thrust right now
 
 // =========== Static Variables ================================================
-
-// Lower level components
+// Control loop objects
 CtrlPidParamStruct yawPid, pitchPid, rollPid;
 DigitalFilterStruct yawRateFilter, pitchRateFilter, rollRateFilter;
 
 // State info
-static unsigned char is_ready = 0;
+static unsigned char is_ready = 0, is_logging = 0; 
+static unsigned char yaw_filter_ready = 0, pitch_filter_ready = 0, roll_filter_ready = 0;
 static RegulatorMode reg_mode;
 static RegulatorOutput rc_outputs;
-static Quaternion reference;
+static Quaternion reference, limited_reference, pose;
+
 // Telemetry buffering
-static RegulatorStateStruct reg_state[REG_BUFF_SIZE];
-static PoolBuffStruct reg_state_buff;
+static RegulatorStateStruct reg_states[2];
+static PingPongBuffer reg_state_buff;
 
 // =========== Function Stubs =================================================
 static float runYawControl(float yaw);
 static float runPitchControl(float pitch);
 static float runRollControl(float roll);
 
+static void calculateError(RegulatorError *error);
+static void filterError(RegulatorError *error);
+static void calculateOutputs(RegulatorError *error, RegulatorOutput *output);
+static void applyOutputs(RegulatorOutput *output);
+static void logTrace(RegulatorError *error, RegulatorOutput *output);
 // =========== Public Functions ===============================================
 
 void rgltrSetup(float ts) {
-
-    unsigned int i;
-    float xcoeffs[4] = {1.0/6.0, 3.0, 3.0, 1.0};
-    float ycoeffs[4] = {0.0, 0.0, 1.0/3.0, 0.0};
-    RegulatorState states[REG_BUFF_SIZE];
-
-    RateFilterParamsStruct f_params;
-    
-    is_ready = 0;
-    reg_mode = REG_OFF;
-
+        
+    // Set up drivers
     servoSetup();
-    mcSetup();  // Set up motor driver
+    mcSetup();
+    
+    // Set up dependent modules
+    attSetup(ts);
+    rateSetup(ts);
+    slewSetup(ts);    
+
+    reg_mode = REG_OFF;  
 
     ctrlInitPidParams(&yawPid, ts);
     ctrlInitPidParams(&pitchPid, ts);
     ctrlInitPidParams(&rollPid, ts);    
 
-    for(i = 0; i < REG_BUFF_SIZE; i++) {
-        states[i] = &reg_state[i];
-    }
-    pbuffInit(&reg_state_buff, REG_BUFF_SIZE, states);
-    
+    ppbuffInit(&reg_state_buff);
+    ppbuffWriteActive(&reg_state_buff, &reg_states[0]);
+    ppbuffWriteInactive(&reg_state_buff, &reg_states[1]);
+        
     reference.w = 1.0;
     reference.x = 0.0;
     reference.y = 0.0;
-    reference.z = 0.0;
+    reference.z = 0.0;   
     
-    f_params.order = 3;
-    f_params.type = 0;
-    f_params.xcoeffs = xcoeffs;
-    f_params.ycoeffs = ycoeffs;
-    rgltrSetYawRateFilter(&f_params);
+    limited_reference.w = 1.0;
+    limited_reference.x = 0.0;
+    limited_reference.y = 0.0;
+    limited_reference.z = 0.0;   
     
-    is_ready = 1;
+    is_logging = 0;
+    is_ready = 1;    
+    
 }
 
 void rgltrSetMode(unsigned char flag) {
 
     if(flag == REG_OFF) {
-        reg_mode = flag;
-        ctrlStop(&yawPid);
-        ctrlStop(&pitchPid);
-        ctrlStop(&rollPid);
-        servoStop();
+        rgltrSetOff();
     } else if(flag == REG_TRACK) {
-        reg_mode = flag;
-        ctrlStart(&yawPid);
-        ctrlStart(&pitchPid);
-        ctrlStart(&rollPid);
-        servoStart();
+        rgltrSetTrack();
     } else if(flag == REG_REMOTE_CONTROL) {
-        reg_mode = flag;
-        ctrlStop(&yawPid);
-        ctrlStop(&pitchPid);
-        ctrlStop(&rollPid);
-        servoStart();
+        rgltrSetRemote();
     }
         
 }
 
+void rgltrSetOff(void) {
+    reg_mode = REG_OFF;
+    ctrlStop(&yawPid);
+    ctrlStop(&pitchPid);
+    ctrlStop(&rollPid);
+    servoStop();
+}
+
+void rgltrSetTrack(void) {
+    reg_mode = REG_TRACK;
+    ctrlStart(&yawPid);
+    ctrlStart(&pitchPid);
+    ctrlStart(&rollPid);
+    servoStart();
+}
+
+void rgltrSetRemote(void) {
+    reg_mode = REG_REMOTE_CONTROL;
+    ctrlStop(&yawPid);
+    ctrlStop(&pitchPid);
+    ctrlStop(&rollPid);
+    servoStart();
+}    
+
 void rgltrSetYawRateFilter(RateFilterParams params) {
 
-    // yawRateFilter = dfilterCreate(params->order, params->type,
-                                    // params->xcoeffs, params->ycoeffs);
-    dfilterInit(params->order, params->type, params->xcoeffs, params->ycoeffs);
+    dfilterInit(&yawRateFilter, params->order, params->type, 
+                params->xcoeffs, params->ycoeffs);
+    yaw_filter_ready = 1;
     
 } 
 
 
 void rgltrSetPitchRateFilter(RateFilterParams params) {
 
-    pitchRateFilter = dfilterCreate(params->order, params->type,
-                                    params->xcoeffs, params->ycoeffs);
-
+    dfilterInit(&pitchRateFilter, params->order, params->type,
+                params->xcoeffs, params->ycoeffs);
+    pitch_filter_ready = 1;
+                
 } 
 
 void rgltrSetRollRateFilter(RateFilterParams params) {
 
-    rollRateFilter = dfilterCreate(params->order, params->type,
-                                    params->xcoeffs, params->ycoeffs);
-
+    dfilterInit(&rollRateFilter, params->order, params->type,
+                params->xcoeffs, params->ycoeffs);
+    roll_filter_ready = 1;
+    
 }
 
 void rgltrSetYawPid(PidParams params) {
@@ -221,139 +245,75 @@ void rgltrSetRollPid(PidParams params) {
 }
 
 void rgltrSetYawRef(float ref) {
- 
     ctrlSetRef(&yawPid, ref);
-
 }
 
 void rgltrSetPitchRef(float ref) {
-
     ctrlSetRef(&pitchPid, ref);
-
 }
 
 void rgltrSetRollRef(float ref) {
-
     ctrlSetRef(&rollPid, ref);
-
 }
 
 void rgltrGetQuatRef(Quaternion *ref) {
-
     if(ref == NULL) { return; }
     quatCopy(ref, &reference);
-
 }
 
 void rgltrSetQuatRef(Quaternion *ref) {
-
     if(ref == NULL) { return; }
     quatCopy(&reference, ref);
-
 }
 
 void rgltrSetRemoteControlValues(float thrust, float steer, float elevator) {
-
     rc_outputs.thrust = thrust;
     rc_outputs.steer = steer;
     rc_outputs.elevator = elevator;
+}
 
+void rgltrStartLogging(void) {
+    is_logging = 1;
+}
+
+void rgltrStopLogging(void) {
+    is_logging = 0;
 }
 
 void rgltrGetState(RegulatorState dst) {
 
     RegulatorState src;
 
-    src = pbuffGetOldestActive(&reg_state_buff);
+    src = ppbuffReadActive(&reg_state_buff);
     if(src == NULL) { // Return 0's if no unread data
         memset(dst, 0, sizeof(RegulatorStateStruct));
         return; 
     }
     
-    memcpy(dst, src, sizeof(RegulatorStateStruct));
-
-    pbuffReturn(&reg_state_buff, src);
+    memcpy(dst, src, sizeof(RegulatorStateStruct));    
     
 }
 
-// 7000 cycles
 void rgltrRunController(void) {
-
-    bams16_t a_2;
-    float a, sina_2, scale;
-    float steer, thrust, elevator, yaw_err, pitch_err, roll_err;    
-    Quaternion pose, error, conj;
-    RegulatorState state;
     
-    if(!is_ready) { return; }
+    RegulatorError error;        
+    RegulatorOutput output;    
 
-    attGetQuat(&pose);      // Retrieve pose estimate
+    if(!is_ready) { return; }    
+
+    attEstimatePose();  // Update attitude estimate
+    rateProcess();      // Update limited_reference
+    slewProcess(&reference, &limited_reference); // Apply slew rate limiting
+
+    attGetQuat(&pose);
+    calculateError(&error);    
+    calculateOutputs(&error, &output);
+    applyOutputs(&output);        
     
-    // qref = qerr*qpose
-    // qref*qpose' = qerr
-    quatConj(&pose, &conj);    
-    quatMult(&reference, &conj, &error);
-
-    // q = [cos(a/2), sin(a/2)*[x, y, z]]
-    // d[x, y, z] = [q]*a/sin(a/2)    
-    
-    if(error.w == 1.0) { // a = 0 case
-        yaw_err = 0.0;
-        pitch_err = 0.0;
-        roll_err = 0.0;
-    } else {
-        a_2 = bams16Acos(error.w); // w = cos(a/2)    
-        a = bams16ToFloatRad(a_2*2);
-        sina_2 = bams16Sin(a_2);
-        scale = a/sina_2;
-        yaw_err = error.z*scale;
-        pitch_err = error.y*scale;
-        roll_err = error.x*scale;
-    }
-    
-    if(reg_mode == REG_REMOTE_CONTROL) {
-
-        steer = rc_outputs.steer;
-        thrust = rc_outputs.thrust;
-        elevator = rc_outputs.elevator;
-
-    } else if(reg_mode == REG_TRACK){
-
-        steer = runYawControl(yaw_err);
-        elevator = runPitchControl(pitch_err);
-        thrust = rc_outputs.thrust;
-    
-    } else {
-
-        steer = 0.0;
-        thrust = 0.0;
-        elevator = 0.0;
-        
+    if(is_logging) {
+        logTrace(&error, &output);
     }
 
-    if(yawRateFilter != NULL) {
-        pitch_err = dfilterApply(yawRateFilter, pitch_err);
-    }
-
-    state = pbuffForceGetIdleOldest(&reg_state_buff);    
-    if(state != NULL) {
-        state->time = sclockGetLocalTicks();
-        memcpy(&state->ref, &reference, sizeof(Quaternion));
-        memcpy(&state->pose, &pose, sizeof(Quaternion));                
-        state->error.w = a;
-        state->error.x = roll_err;
-        state->error.y = pitch_err;
-        state->error.z = yaw_err;
-        state->u[0] = thrust;
-        state->u[1] = steer;
-        state->u[2] = elevator;
-        pbuffAddActive(&reg_state_buff, (void*) state);
-    }        
-
-    mcSteer(steer);
-    mcThrust(thrust);
-    servoSet(elevator);
-    
 }
 
 
@@ -361,39 +321,127 @@ void rgltrRunController(void) {
 
 static float runYawControl(float yaw) {
 
-    float u;
-
-    if (!ctrlIsRunning(&yawPid)) {
-        u = 0.0;
-    } else {        
-        u = ctrlRunPid(&yawPid, yaw, yawRateFilter);                
-    }    
-
-    return u;
+    if(yaw_filter_ready) {
+        return ctrlRunPid(&yawPid, yaw, &yawRateFilter);
+    } else {
+        return ctrlRunPid(&yawPid, yaw, NULL);
+    }
 
 }
 
 
-static float runPitchControl(float pitch) {
+static float runPitchControl(float pitch) {   
 
-    float u;
-
-    if (!ctrlIsRunning(&pitchPid)) {
-        u = 0.0;
+    if(pitch_filter_ready) {
+        return ctrlRunPid(&pitchPid, pitch, &pitchRateFilter);
     } else {
-        u = ctrlRunPid(&pitchPid, pitch, pitchRateFilter);
-    }
+        return ctrlRunPid(&pitchPid, pitch, NULL);
+    }        
 
-    return u;
-    
 }
 
 static float runRollControl(float roll) {
 
-    if(!ctrlIsRunning(&rollPid)) {
-        return 0.0;
+    if(roll_filter_ready) {
+        return ctrlRunPid(&rollPid, roll, &rollRateFilter);
     } else {
-        return ctrlRunPid(&rollPid, roll, rollRateFilter);
+        return ctrlRunPid(&rollPid, roll, NULL);
     }
+
+}
+
+static void calculateError(RegulatorError *error) {
+
+    Quaternion conj_quat, err_quat;
+    bams16_t a_2;
+    float scale;
+    
+    // qref = qpose*qerr
+    // qpose'*qref = qerr
+    quatConj(&pose, &conj_quat);
+    //quatMult(&limited_reference, &conj_quat, &err_quat);
+    quatMult(&conj_quat, &limited_reference, &err_quat);
+
+    // q = [cos(a/2), sin(a/2)*[x, y, z]]
+    // d[x, y, z] = [q]*a/sin(a/2)        
+    if(err_quat.w == 1.0) { // a = 0 case
+        error->yaw_err = 0.0;
+        error->pitch_err = 0.0;
+        error->roll_err = 0.0;
+    } else {
+        a_2 = bams16Acos(err_quat.w); // w = cos(a/2)             
+        scale = bams16ToFloatRad(a_2*2)/bams16Sin(a_2); // a/sin(a/2)
+        error->yaw_err = err_quat.z*scale;
+        error->pitch_err = err_quat.y*scale;
+        error->roll_err = err_quat.x*scale;
+    }
+    
+}
+
+static void filterError(RegulatorError *error) {
+
+    if(yaw_filter_ready) {
+        error->yaw_err = dfilterApply(&yawRateFilter, error->yaw_err);
+    }
+    if(pitch_filter_ready) {
+        error->pitch_err = dfilterApply(&pitchRateFilter, error->pitch_err);
+    }
+    if(roll_filter_ready) {
+        error->roll_err = dfilterApply(&rollRateFilter, error->roll_err);
+    }
+    
+}
+
+static void calculateOutputs(RegulatorError *error, RegulatorOutput *output) {
+
+    if(reg_mode == REG_REMOTE_CONTROL) {
+
+        output->steer = rc_outputs.steer;
+        output->thrust = rc_outputs.thrust;
+        output->elevator = rc_outputs.elevator;
+
+    } else if(reg_mode == REG_TRACK){
+
+        output->steer = runYawControl(error->yaw_err);
+        output->elevator = runPitchControl(error->pitch_err);        
+        output->thrust = runRollControl(error->pitch_err);
+
+    } else {
+
+        output->steer = 0.0;
+        output->thrust = 0.0;
+        output->elevator = 0.0;
+
+    }
+
+}
+
+static void applyOutputs(RegulatorOutput *output) {
+
+    mcSteer(output->steer);
+    mcThrust(output->thrust);
+    servoSet(output->elevator);
+
+}
+
+static void logTrace(RegulatorError *error, RegulatorOutput *output) {
+
+    RegulatorStateStruct *storage;
+    
+    storage = ppbuffReadInactive(&reg_state_buff);
+    
+    if(storage != NULL) {
+        quatCopy(&storage->ref, &limited_reference);
+        quatCopy(&storage->pose, &pose);        
+        storage->error.w = 0.0;
+        storage->error.x = error->roll_err;
+        storage->error.y = error->pitch_err;
+        storage->error.z = error->yaw_err;
+        storage->u[0] = output->thrust;
+        storage->u[1] = output->steer;
+        storage->u[2] = output->elevator;
+        storage->time = sclockGetLocalTicks();        
+    }
+    ppbuffFlip(&reg_state_buff);
 
 }

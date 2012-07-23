@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2009 - 2012, Regents of the University of California
  * All rights reserved.
  *
@@ -31,7 +31,7 @@
  *
  * by Stanley S. Baek
  *
- * v.beta
+ * v.0.4
  *
  */
 
@@ -88,9 +88,12 @@ void rgltrSetup(float ts);
  * @param flag - State to transition to
  */
 void rgltrSetMode(unsigned char flag);
+void rgltrSetOff(void);
+void rgltrSetTrack(void);
+void rgltrSetRemote(void);
 
 /**
- * Set yaw filter parameters
+ * Set rate filter parameters
  * @param params - Yaw/pitch/roll filter parameter struct
  */
 void rgltrSetYawRateFilter(RateFilterParams params);
@@ -140,6 +143,9 @@ void rgltrRunController(void);
  * @note 7000 cycles
  */
 void rgltrGetState(RegulatorState state);
+void rgltrStartLogging(void);
+void rgltrStopLogging(void);
+
 
 #endif  // __REGULATOR_H
 
