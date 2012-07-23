@@ -64,8 +64,7 @@
 
 #define NETWORK_BROADCAST_ADDR  			(0xFFFF)
 
-
-void netSetup(void);
+void netSetup(unsigned int dir_size);
 unsigned int netGetLocalAddress(void);
 unsigned int netGetLocalPanID(void);
 unsigned int netGetBaseAddress(void);

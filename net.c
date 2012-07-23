@@ -90,7 +90,7 @@ void netSendAccept(long);
 // ==== FUNCTION BODIES =====================================
 // Setup the network module
 // Note that this method blocks until an address is assigned!
-void netSetup(void) {
+void netSetup(unsigned int dir_size) {
 
     localAddress = DEFAULT_LOCAL_ADDR;
     localPanID = DEFAULT_LOCAL_PAN;
@@ -108,6 +108,8 @@ void netSetup(void) {
     
     attempts_exceeded = 0;
     address_received = 0;
+    
+    dirInit(dir_size);
     
 }
 
