@@ -42,9 +42,9 @@
 #include "cv.h"
 #include "cam.h"
 #include "counter.h"
+#include "utils.h"
 #include "bams.h" // For fast trig
 #include "sqrti.h" // For fast integer square root
-#include "utils.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -103,6 +103,15 @@ void cvProcessFrame(CamFrame frame, CvResult info) {
 
 CamFrame cvSetBackgroundFrame(CamFrame frame) {
 
+    CamFrame old;
+
+    old = background_frame;
+    background_frame = frame;
+
+    return old;
+    
+}
+
 void cvReadFrameParams(CamFrame frame, CvResult info) {
 
     if(frame == NULL || info == NULL) { return; };
@@ -134,6 +143,16 @@ void cvBackgroundSubtractFrame(CamFrame frame, CvResult info) {
             cap_val = frame->pixels[i][j];
             bg_val = background_frame->pixels[i][j];
             
+            if(cap_val > bg_val) {
+                frame->pixels[i][j] = cap_val - bg_val;
+            } else {
+                frame->pixels[i][j] = 0;
+            }            
+        }
+    }
+
+}
+
 /**
  * Find the maximum luminosity pixel in the input frame.
  *
