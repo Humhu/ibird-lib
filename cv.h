@@ -45,26 +45,30 @@
 
 // Frame calculation result storage class
 typedef struct {
-    // State info
-    unsigned int frameNum;      // Corresponding frame number
-    unsigned char valid;        // Valid bit
+    // Base info
+    unsigned int frame_num;     // Corresponding frame number    
     unsigned long timestamp;    // Time of processing
-    // Processing results
-    unsigned int offset[2];     // Location of center in camera frame
-    unsigned int centroid[2];   // Centroid location
-    unsigned int max[2];        // Max pixel location
-    // Mass properties
-    unsigned long mass;         // Sum of luminosity over frame
-    unsigned char max_lum;      // Brightest pixel luminosity
+    unsigned int offset[2];     // Location of center in camera frame 
+    // Mass properties    
+    unsigned long mass;         // Total luminosity
     unsigned char avg_lum;      // Average luminosity
-} FrameInfoStruct;
+    unsigned char row_means[DS_IMAGE_ROWS]; // Row means
+    unsigned char col_means[DS_IMAGE_COLS]; // Column means        
+    // Centroid finding   
+    unsigned int centroid[2];   // Centroid location   
+    // Max finding
+    unsigned int max[2];        // Max pixel location
+    unsigned char max_lum;      // Brightest pixel luminosity
+} CvResultStruct;
 
-typedef FrameInfoStruct* FrameInfo;
+typedef CvResultStruct* CvResult;
 
 /**
  * Set up the CV module
  */
 void cvSetup(void);
+
+void cvSetHP(void);
 
 /**
  * Set a frame to be subtracted from all processed frames
@@ -78,8 +82,26 @@ CamFrame cvSetBackgroundFrame(CamFrame frame);
  * Process a frame and record properties into an info struct.
  *
  * @param frame - CamFrame to process
- * @param info - Pointer to FrameInfoStruct to populate with frame's properties
+ * @param info - Pointer to CvResultStruct to populate with frame's properties
  */
-void cvProcessFrame(CamFrame frame, FrameInfo info);
+void cvProcessFrame(CamFrame frame, CvResult info);
+
+void cvReadFrameParams(CamFrame frame, CvResult info);
+
+void cvCalculateMeans(CamFrame frame, CvResult info);
+
+void cvBackgroundSubtractFrame(CamFrame frame, CvResult info);
+
+void cvCentroidFrame(CamFrame frame, CvResult info);
+
+void cvMaxPixelFrame(CamFrame frame, CvResult info);
+
+void cvRotateFrame(CamFrame frame, bams16_t theta);
+
+void cvSobel(CamFrame frame, CvResult info);
+
+void cvHighPassPeak(CamFrame frame, CvResult info);
+
+void cvBinary(CamFrame frame, CvResult info);
 
 #endif
