@@ -59,9 +59,10 @@
 #define CMD_GET_VERSION                 (0x0A)      // Reserved - Do not use!
 #define COMMAND_READ_GOTO               (0x10)      // Reserved - Do not use!
 
-#define CMD_PING                        (0x1E)      // Do nothing
-#define CMD_ECHO                        (0x1F)      // send back the received packet
+#define CMD_PING                        (0x12)      // Do nothing
+#define CMD_ECHO                        (0x13)      // send back the received packet
 
+#define CMD_SET_REGULATOR_OFFSETS       (0x20)      // Set PID offsets
 #define CMD_SET_REGULATOR_MODE          (0x21)      // Set the regulator mode
 #define CMD_SET_REGULATOR_REF           (0x22)      // Set the regulator references
 #define CMD_SET_REGULATOR_PID           (0x23)      // Set regulator PID parameters

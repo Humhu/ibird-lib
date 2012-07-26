@@ -92,9 +92,11 @@ typedef struct {
 #define ROLL_SAT_MAX        (1.0)
 #define ROLL_SAT_MIN        (0.0) // Doubling as thrust right now
 
+#define DEFAULT_SLEW_LIMIT  (1.0)
+
 // =========== Static Variables ================================================
 // Control loop objects
-CtrlPidParamStruct yawPid, pitchPid, rollPid;
+CtrlPidParamStruct yawPid, pitchPid, thrustPid;
 DigitalFilterStruct yawRateFilter, pitchRateFilter, rollRateFilter;
 
 // State info
@@ -128,14 +130,20 @@ void rgltrSetup(float ts) {
     
     // Set up dependent modules
     attSetup(ts);
+    
+    
     rateSetup(ts);
+    
+    
     slewSetup(ts);    
-
+    slewSetLimit(DEFAULT_SLEW_LIMIT);
+    slewEnable();
+    
     reg_mode = REG_OFF;  
 
     ctrlInitPidParams(&yawPid, ts);
     ctrlInitPidParams(&pitchPid, ts);
-    ctrlInitPidParams(&rollPid, ts);    
+    ctrlInitPidParams(&thrustPid, ts);    
 
     ppbuffInit(&reg_state_buff);
     ppbuffWriteActive(&reg_state_buff, &reg_states[0]);
@@ -172,7 +180,7 @@ void rgltrSetOff(void) {
     reg_mode = REG_OFF;
     ctrlStop(&yawPid);
     ctrlStop(&pitchPid);
-    ctrlStop(&rollPid);
+    ctrlStop(&thrustPid);
     servoStop();
 }
 
@@ -180,7 +188,7 @@ void rgltrSetTrack(void) {
     reg_mode = REG_TRACK;
     ctrlStart(&yawPid);
     ctrlStart(&pitchPid);
-    ctrlStart(&rollPid);
+    ctrlStart(&thrustPid);
     servoStart();
 }
 
@@ -188,7 +196,7 @@ void rgltrSetRemote(void) {
     reg_mode = REG_REMOTE_CONTROL;
     ctrlStop(&yawPid);
     ctrlStop(&pitchPid);
-    ctrlStop(&rollPid);
+    ctrlStop(&thrustPid);
     servoStart();
 }    
 
@@ -217,6 +225,14 @@ void rgltrSetRollRateFilter(RateFilterParams params) {
     
 }
 
+void rgltrSetOffsets(float *offsets) {
+
+    ctrlSetPidOffset(&yawPid, offsets[0]);
+    ctrlSetPidOffset(&pitchPid, offsets[1]);
+    ctrlSetPidOffset(&thrustPid, offsets[2]);
+
+}
+
 void rgltrSetYawPid(PidParams params) {
     
     ctrlSetPidParams(&yawPid, params->ref, params->kp, params->ki, params->kd);
@@ -237,10 +253,10 @@ void rgltrSetPitchPid(PidParams params) {
 
 void rgltrSetRollPid(PidParams params) {
 
-    ctrlSetPidParams(&rollPid, params->ref, params->kp, params->ki, params->kd);
-    ctrlSetPidOffset(&rollPid, params->offset);
-    ctrlSetRefWeigts(&rollPid, params->beta, params->gamma);
-    ctrlSetSaturation(&rollPid, ROLL_SAT_MAX, ROLL_SAT_MIN);
+    ctrlSetPidParams(&thrustPid, params->ref, params->kp, params->ki, params->kd);
+    ctrlSetPidOffset(&thrustPid, params->offset);
+    ctrlSetRefWeigts(&thrustPid, params->beta, params->gamma);
+    ctrlSetSaturation(&thrustPid, ROLL_SAT_MAX, ROLL_SAT_MIN);
 
 }
 
@@ -253,7 +269,7 @@ void rgltrSetPitchRef(float ref) {
 }
 
 void rgltrSetRollRef(float ref) {
-    ctrlSetRef(&rollPid, ref);
+    ctrlSetRef(&thrustPid, ref);
 }
 
 void rgltrGetQuatRef(Quaternion *ref) {
@@ -343,9 +359,9 @@ static float runPitchControl(float pitch) {
 static float runRollControl(float roll) {
 
     if(roll_filter_ready) {
-        return ctrlRunPid(&rollPid, roll, &rollRateFilter);
+        return ctrlRunPid(&thrustPid, roll, &rollRateFilter);
     } else {
-        return ctrlRunPid(&rollPid, roll, NULL);
+        return ctrlRunPid(&thrustPid, roll, NULL);
     }
 
 }

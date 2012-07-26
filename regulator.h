@@ -92,6 +92,9 @@ void rgltrSetOff(void);
 void rgltrSetTrack(void);
 void rgltrSetRemote(void);
 
+// Set 3 axes offsets
+void rgltrSetOffsets(float *offsets);
+
 /**
  * Set rate filter parameters
  * @param params - Yaw/pitch/roll filter parameter struct
