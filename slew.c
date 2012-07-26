@@ -27,7 +27,7 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 *
-* Reference Slewing
+* Reference Slew Rate Limiter
 *
 * by Humphrey Hu
 *
@@ -43,10 +43,10 @@
 #include <stdlib.h>
 
 // =========== Static Variables ===============================================
-unsigned char is_ready = 0, is_running;
-Quaternion prev_ref;
-float max_slew_rate, period;
-bams32_t max_angular_displacement;
+static unsigned char is_ready = 0, is_running;
+static Quaternion prev_ref;
+static float max_slew_rate, period;
+static bams32_t max_angular_displacement;
 
 // =========== Public Methods ===============================================
 void slewSetup(float ts) {
@@ -58,9 +58,17 @@ void slewSetup(float ts) {
     
     period = ts;
     
-    is_running = 1; // TODO: Should be changed to off by default
+    is_running = 0; // TODO: Should be changed to off by default
     is_ready = 1;
     
+}
+
+void slewEnable(void) {
+    is_running = 1;
+}
+
+void slewDisable(void) {
+    is_running = 0;
 }
 
 // qtarget = qcurr*qdisp
