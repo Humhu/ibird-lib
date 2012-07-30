@@ -87,14 +87,14 @@
 
 // ==== CONSTANTS =============================================
 #define FCY                         (40000000)  // 40 MIPS   
-#define REGULATOR_FCY               (200)       // 200 Hz
-#define RADIO_FCY                   (250)       // 250 Hz
+#define REGULATOR_FCY               (300)       // 300 Hz
+#define RADIO_FCY                   (200)       // 200 Hz
 #define RADIO_TX_QUEUE_SIZE         (40)        // 40 Outgoing
 #define RADIO_RX_QUEUE_SIZE         (40)        // 40 Incoming
 
-#define DIRECTORY_SIZE              (10)
+#define DIRECTORY_SIZE              (20)        // Network size
 #define NUM_CAM_FRAMES              (1)         // Camera driver frames
-#define TELEM_SUBSAMPLE             (5)
+#define TELEM_SUBSAMPLE             (5)         // Telemetry subsample default
 
 // ==== FUNCTION STUBS =========================================
 static void processRadioBuffer(void);
@@ -179,12 +179,12 @@ void setupAll(void) {
     // Note: OV7660 I2C operates at 100 kHz on the same bus
     // as the accelerometer. Make sure to set up camera module first!
     dfmemSetup();                           // Flash memory device
-    camSetup(cam_frames, NUM_CAM_FRAMES);   // Camera device 
+    //camSetup(cam_frames, NUM_CAM_FRAMES);   // Camera device
     xlSetup();    
     xlSetRange(16);                         // +- 16 g range
     xlSetOutputRate(0, 0x0c);               // 800 Hz
     gyroSetup();
-    gyroSetDeadZone(35);
+    gyroSetDeadZone(25);
     
     LED_GREEN = 1; // CPU, sensors initialization clear
     
@@ -219,7 +219,7 @@ void setupAll(void) {
     LED_GREEN = 0;
     LED_ORANGE = 0;
     
-    camStart();     // Start camera capture
+    //camStart();     // Start camera capture
     attStart();     // Start attitude estimation 
     EnableIntT5;    // Start control loop
 
