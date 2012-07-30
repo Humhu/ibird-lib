@@ -103,6 +103,28 @@ void rateDisable(void) {
     is_running = 0;
 }
 
+void rateApplyGlobalRotation(Quaternion *rot) {
+
+    Quaternion current_ref;
+    
+    rgltrGetQuatRef(&current_ref);
+    quatMult(rot, &current_ref, &current_ref);
+    quatNormalize(&current_ref);
+    rgltrSetQuatRef(&current_ref);
+
+}
+
+void rateApplyLocalRotation(Quaternion *rot) {
+
+    Quaternion current_ref;
+    
+    rgltrGetQuatRef(&current_ref);
+    quatMult(&current_ref, rot, &current_ref);
+    quatNormalize(&current_ref);
+    rgltrSetQuatRef(&current_ref);
+
+}
+
 void rateProcess(void) {
 
     Quaternion current_ref;

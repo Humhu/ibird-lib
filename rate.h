@@ -41,6 +41,8 @@
 #ifndef __RATE_H
 #define __RATE_H
 
+#include "quat.h"
+
 typedef struct {
     float yaw_rate;
     float pitch_rate;
@@ -67,6 +69,12 @@ void rateSetBodySlew(Rate rate);
  */
 void rateEnable(void);
 void rateDisable(void);
+
+/**
+ * Apply a rotation to the reference in global/local axes
+ */
+void rateApplyGlobalRotation(Quaternion *rot);
+void rateApplyLocalRotation(Quaternion *rot);
 
 /**
  * Generate next reference. Should be called at fixed frequency.
