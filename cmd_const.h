@@ -62,6 +62,8 @@
 #define CMD_PING                        (0x12)      // Do nothing
 #define CMD_ECHO                        (0x13)      // send back the received packet
 
+#define CMD_ROTATE_REF_GLOBAL           (0x18)      //
+#define CMD_ROTATE_REF_LOCAL            (0x19)      //
 #define CMD_SET_REGULATOR_OFFSETS       (0x20)      // Set PID offsets
 #define CMD_SET_REGULATOR_MODE          (0x21)      // Set the regulator mode
 #define CMD_SET_REGULATOR_REF           (0x22)      // Set the regulator references
