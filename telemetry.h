@@ -47,13 +47,15 @@ typedef struct {
 } TelemetryDatapoint;
  
 // State Telemetry Packet (Type B)
-#define TELEMETRY_B_SIZE	(64)
+#define TELEMETRY_B_SIZE	(66)
 typedef struct {
     unsigned long time;     // (4) Local time    
     Quaternion ref;         // (16) Reference
     Quaternion pose;        // (16) Position
     Quaternion error;       // (16) Error
     float u[3];             // (12) Output
+    unsigned char ED;
+    unsigned char RSSI;
 } TelemetryStructB;
 typedef TelemetryStructB* TelemetryB;
 
